@@ -1,6 +1,8 @@
 ﻿const defaultRequirementRef = window.defaultRequirement;
 const runCosPilotPipelineRef = window.runCosPilotPipeline;
 const authStore = window.authStore;
+const profileStore = window.profileStore;
+const profileDrawer = window.profileDrawer;
 
 let naturalInput = defaultRequirementRef.rawText;
 let result = runCosPilotPipelineRef(naturalInput);
@@ -11,6 +13,13 @@ let isAuthModalOpen = false;
 let isProfileDrawerOpen = false;
 let authMode = "login";
 let authError = "";
+let isProfileEditing = false;
+let profileDraft = null;
+let profileError = "";
+let isPasswordModalOpen = false;
+let passwordError = "";
+let pendingAuthAction = null;
+let actionFeedback = "";
 
 const app = document.querySelector("#app");
 
@@ -50,7 +59,43 @@ function roleLabel(role) {
   return role === "provider" ? "服务者" : "Coser";
 }
 
+function getCustomerProfile(user) {
+  if (!user || user.role !== "customer") return null;
+  return profileStore.getProfile(user.id) || profileStore.createDefaultProfile(user);
+}
 
+function resetProfileEditing() {
+  isProfileEditing = false;
+  profileDraft = null;
+  profileError = "";
+}
+
+function resetPasswordModal() {
+  isPasswordModalOpen = false;
+  passwordError = "";
+}
+
+function resetProfileUiState() {
+  resetProfileEditing();
+  resetPasswordModal();
+}
+
+function syncProfileDraftFromForm() {
+  const form = document.querySelector("#customer-profile-form");
+  const currentUser = authStore.getCurrentUser();
+  if (!form || !currentUser) return profileDraft;
+  const formData = new FormData(form);
+  profileDraft = {
+    ...(profileDraft || getCustomerProfile(currentUser)),
+    nickname: String(formData.get("nickname") || "").trim(),
+    gender: formData.get("gender") || "hidden",
+    province: String(formData.get("province") || "").trim(),
+    city: String(formData.get("city") || "").trim(),
+    district: String(formData.get("district") || "").trim(),
+    locationMode: formData.get("locationMode") === "precise" ? "precise" : "fuzzy",
+  };
+  return profileDraft;
+}
 function showActionFeedback(message) {
   actionFeedback = message;
   render();
@@ -86,14 +131,19 @@ function renderAuthNav() {
     return `<button class="login-entry interactive-surface" data-auth-open="login" type="button">登录</button>`;
   }
 
+  const profile = currentUser.role === "customer" ? getCustomerProfile(currentUser) : null;
+  const navLabel = profile?.nickname || "我的";
+  const navAvatar = profile
+    ? profileDrawer.avatarMarkup(profile, profile.nickname, "nav-avatar")
+    : `<span class="avatar-placeholder nav-avatar">${currentUser.email.slice(0, 1).toUpperCase()}</span>`;
+
   return `
     <button class="my-entry" data-profile-open="true" data-action="open-profile-drawer" onclick="window.openProfileDrawer()" type="button" aria-label="我的账户">
-      <span class="avatar-placeholder">${currentUser.email.slice(0, 1).toUpperCase()}</span>
-      <span>我的</span>
+      ${navAvatar}
+      <span>${navLabel}</span>
     </button>
   `;
 }
-
 function renderAuthModal() {
   if (!isAuthModalOpen) return "";
   const isLogin = authMode === "login";
@@ -152,35 +202,27 @@ function renderMyDrawer() {
   const currentUser = authStore.getCurrentUser();
   if (!currentUser) return "";
 
-  return `
-    <div class="account-drawer-backdrop" data-profile-close="true">
-      <aside class="account-drawer interactive-surface" role="dialog" aria-modal="true" aria-label="我的资料">
-        <button class="account-drawer-close" data-profile-close="true" type="button">×</button>
-        <div class="account-drawer-header">
-          <p class="eyebrow">Account</p>
-          <h2>我的资料</h2>
-          <div class="account-summary">
-            <span class="avatar-placeholder large-avatar">${currentUser.email.slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>${currentUser.email}</strong>
-              <small>${roleLabel(currentUser.role)}</small>
-            </div>
-          </div>
-        </div>
-        <dl class="account-details">
-          <div><dt>Email</dt><dd>${currentUser.email}</dd></div>
-          <div><dt>Role</dt><dd>${currentUser.role}</dd></div>
-          <div><dt>User ID</dt><dd>${currentUser.id}</dd></div>
-        </dl>
-        <div class="account-drawer-actions">
-          <button class="secondary-action interactive-surface" type="button">编辑资料</button>
-          <button class="primary-action interactive-surface" data-auth-logout="true" type="button">退出登录</button>
-        </div>
-      </aside>
-    </div>
-  `;
-}
+  if (currentUser.role === "provider") {
+    return profileDrawer.renderProviderDrawer({ currentUser });
+  }
 
+  const profile = getCustomerProfile(currentUser);
+  if (isProfileEditing) {
+    return profileDrawer.renderCustomerEdit({
+      currentUser,
+      profileDraft: profileDraft || profile,
+      profileError,
+    });
+  }
+
+  return profileDrawer.renderCustomerView({
+    currentUser,
+    profile,
+    publicLocation: profileStore.getPublicLocation(profile),
+    isPasswordModalOpen,
+    passwordError,
+  });
+}
 function renderComposer() {
   return `
     <section class="composer" id="planner">
@@ -469,6 +511,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-profile-open]").forEach((button) => {
     button.addEventListener("click", () => {
+      resetProfileUiState();
       isProfileDrawerOpen = true;
       render();
     });
@@ -478,6 +521,7 @@ function bindEvents() {
     node.addEventListener("click", (event) => {
       if (event.target.dataset.profileClose) {
         isProfileDrawerOpen = false;
+        resetProfileUiState();
         render();
       }
     });
@@ -487,6 +531,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       authStore.logout();
       isProfileDrawerOpen = false;
+      resetProfileUiState();
       render();
     });
   });
@@ -494,10 +539,116 @@ function bindEvents() {
   document.onkeydown = (event) => {
     if (event.key === "Escape" && isProfileDrawerOpen) {
       isProfileDrawerOpen = false;
+      resetProfileUiState();
       render();
     }
   };
 
+  document.querySelectorAll("[data-password-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      isPasswordModalOpen = true;
+      passwordError = "";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-password-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      resetPasswordModal();
+      render();
+    });
+  });
+
+  const passwordForm = document.querySelector("#password-form");
+  if (passwordForm) {
+    passwordForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(passwordForm);
+      const currentPassword = formData.get("currentPassword");
+      const newPassword = formData.get("newPassword");
+      const confirmPassword = formData.get("confirmPassword");
+      if (newPassword !== confirmPassword) {
+        passwordError = "两次输入的新密码不一致。";
+        render();
+        return;
+      }
+      const outcome = authStore.changePassword({ currentPassword, newPassword });
+      if (!outcome.ok) {
+        passwordError = outcome.error;
+        render();
+        return;
+      }
+      resetPasswordModal();
+      showActionFeedback("密码已更新。");
+    });
+  }
+  document.querySelectorAll("[data-profile-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const currentUser = authStore.getCurrentUser();
+      const profile = getCustomerProfile(currentUser);
+      profileDraft = profile ? { ...profile } : null;
+      profileError = "";
+      isProfileEditing = true;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-profile-cancel-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      resetProfileEditing();
+      render();
+    });
+  });
+
+  const avatarInput = document.querySelector("#profile-avatar-input");
+  if (avatarInput) {
+    avatarInput.addEventListener("change", () => {
+      const file = avatarInput.files?.[0];
+      if (!file) return;
+      if (!["image/png", "image/jpeg"].includes(file.type)) {
+        profileError = "头像只支持 png / jpg / jpeg。";
+        render();
+        return;
+      }
+      syncProfileDraftFromForm();
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        const currentUser = authStore.getCurrentUser();
+        profileDraft = { ...(profileDraft || getCustomerProfile(currentUser)), avatar: reader.result };
+        profileError = "";
+        render();
+      });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const profileForm = document.querySelector("#customer-profile-form");
+  if (profileForm) {
+    profileForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const currentUser = authStore.getCurrentUser();
+      if (!currentUser || currentUser.role !== "customer") return;
+      const formData = new FormData(profileForm);
+      const nickname = String(formData.get("nickname") || "").trim();
+      if (!nickname) {
+        profileError = "昵称不能为空。";
+        render();
+        return;
+      }
+      profileStore.updateProfile(currentUser.id, {
+        ...(profileDraft || {}),
+        avatar: profileDraft?.avatar || null,
+        nickname,
+        gender: formData.get("gender") || "hidden",
+        province: String(formData.get("province") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        district: String(formData.get("district") || "").trim(),
+        locationMode: formData.get("locationMode") === "precise" ? "precise" : "fuzzy",
+      });
+      resetProfileEditing();
+      render();
+    });
+  }
   const authForm = document.querySelector("#auth-form");
   if (authForm) {
     authForm.addEventListener("submit", (event) => {
@@ -526,6 +677,9 @@ function bindEvents() {
         return;
       }
 
+      if (outcome.user?.role === "customer") {
+        profileStore.createDefaultProfile(outcome.user);
+      }
       isAuthModalOpen = false;
       authError = "";
       runPendingAuthAction();
@@ -536,12 +690,14 @@ function bindEvents() {
 
 
 window.openProfileDrawer = function openProfileDrawer() {
+  resetProfileUiState();
   isProfileDrawerOpen = true;
   render();
 };
 
 window.closeProfileDrawer = function closeProfileDrawer() {
   isProfileDrawerOpen = false;
+  resetProfileUiState();
   render();
 };
 function render() {
@@ -564,6 +720,7 @@ function render() {
     ${renderProviderProfile()}
     ${renderAuthModal()}
     ${renderMyDrawer()}
+    ${renderActionFeedback()}
   `;
   bindEvents();
 }

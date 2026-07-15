@@ -1376,3 +1376,171 @@ button.plan-card {
   box-shadow: var(--shadow);
   font-weight: 850;
 }
+
+/* Customer profile drawer */
+.avatar-image {
+  overflow: hidden;
+  background: #fff;
+}
+
+.avatar-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-editor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-avatar-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.profile-avatar-editor input {
+  max-width: 230px;
+  color: var(--ink);
+  font-size: 13px;
+  text-transform: none;
+}
+
+.profile-edit-fields {
+  display: grid;
+  gap: 14px;
+  padding: 22px 28px 0;
+}
+
+.profile-edit-fields label,
+.location-mode-picker {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.profile-edit-fields label span,
+.location-mode-picker legend {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.profile-edit-fields input,
+.profile-edit-fields select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+}
+
+.location-mode-picker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.location-mode-picker legend {
+  grid-column: 1 / -1;
+}
+
+.location-mode-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.location-mode-picker input {
+  width: auto;
+}
+
+.muted-account-id dd {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* Profile drawer refinements */
+.nav-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.small-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+
+.account-summary-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.profile-info-list dd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.password-mask {
+  letter-spacing: 2px;
+}
+
+.text-action {
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+}
+
+.password-modal {
+  position: fixed;
+  top: 50%;
+  left: calc(100% - 220px);
+  z-index: 80;
+  width: min(360px, calc(100vw - 40px));
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.password-modal .auth-heading h2 {
+  font-size: 28px;
+}
+
+@media (max-width: 720px) {
+  .password-modal {
+    left: 50%;
+  }
+}
+
+.password-modal.interactive-surface:hover,
+.password-modal.interactive-surface:active {
+  transform: translate(-50%, -50%);
+}

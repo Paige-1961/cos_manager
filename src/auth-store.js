@@ -23,7 +23,7 @@ function saveUsers(users) {
   writeJson(AUTH_USERS_KEY, users);
 }
 
-function getCurrentUser() {
+function getStoredCurrentUser() {
   const userId = localStorage.getItem(AUTH_SESSION_KEY);
   if (!userId) return null;
   return getUsers().find((user) => user.id === userId) || null;
@@ -39,7 +39,13 @@ function createUserId() {
 }
 
 function publicUser(user) {
-  return user ? { ...user } : null;
+  if (!user) return null;
+  const { password, ...safeUser } = user;
+  return safeUser;
+}
+
+function getCurrentUser() {
+  return publicUser(getStoredCurrentUser());
 }
 
 function register({ email, password, role }) {
@@ -92,6 +98,27 @@ function logout() {
   return { ok: true };
 }
 
+function changePassword({ currentPassword, newPassword }) {
+  const currentUser = getStoredCurrentUser();
+  if (!currentUser) return { ok: false, error: "请先登录。" };
+  if (!currentPassword || !newPassword) {
+    return { ok: false, error: "请填写当前密码和新密码。" };
+  }
+  if (newPassword.length < 6) {
+    return { ok: false, error: "新密码至少 6 位。" };
+  }
+
+  const users = getUsers();
+  const index = users.findIndex((user) => user.id === currentUser.id);
+  if (index === -1 || users[index].password !== currentPassword) {
+    return { ok: false, error: "当前密码不正确。" };
+  }
+
+  users[index] = { ...users[index], password: newPassword, updatedAt: new Date().toISOString() };
+  saveUsers(users);
+  return { ok: true, user: publicUser(users[index]) };
+}
+
 function isAuthenticated() {
   return Boolean(getCurrentUser());
 }
@@ -105,4 +132,5 @@ window.authStore = {
   register,
   login,
   logout,
+  changePassword,
 };
