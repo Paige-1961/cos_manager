@@ -8,6 +8,7 @@ let requirement = result.requirement;
 let selectedPlanIndex = 0;
 let activeProviderId = null;
 let isAuthModalOpen = false;
+let isProfileDrawerOpen = false;
 let authMode = "login";
 let authError = "";
 
@@ -49,6 +50,36 @@ function roleLabel(role) {
   return role === "provider" ? "服务者" : "Coser";
 }
 
+
+function showActionFeedback(message) {
+  actionFeedback = message;
+  render();
+}
+
+function requireAuth(actionCallback) {
+  if (!authStore.isAuthenticated()) {
+    pendingAuthAction = actionCallback;
+    authMode = "login";
+    authError = "";
+    isAuthModalOpen = true;
+    render();
+    return;
+  }
+  actionCallback();
+}
+
+function runPendingAuthAction() {
+  if (!pendingAuthAction) return;
+  const action = pendingAuthAction;
+  pendingAuthAction = null;
+  action();
+}
+
+function renderActionFeedback() {
+  if (!actionFeedback) return "";
+  return `<div class="action-feedback" role="status">${actionFeedback}</div>`;
+}
+
 function renderAuthNav() {
   const currentUser = authStore.getCurrentUser();
   if (!currentUser) {
@@ -56,7 +87,7 @@ function renderAuthNav() {
   }
 
   return `
-    <button class="my-entry" type="button" aria-label="我的账户">
+    <button class="my-entry" data-profile-open="true" data-action="open-profile-drawer" onclick="window.openProfileDrawer()" type="button" aria-label="我的账户">
       <span class="avatar-placeholder">${currentUser.email.slice(0, 1).toUpperCase()}</span>
       <span>我的</span>
     </button>
@@ -114,6 +145,42 @@ function renderAuthModal() {
   `;
 }
 
+
+
+function renderMyDrawer() {
+  if (!isProfileDrawerOpen) return "";
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return "";
+
+  return `
+    <div class="account-drawer-backdrop" data-profile-close="true">
+      <aside class="account-drawer interactive-surface" role="dialog" aria-modal="true" aria-label="我的资料">
+        <button class="account-drawer-close" data-profile-close="true" type="button">×</button>
+        <div class="account-drawer-header">
+          <p class="eyebrow">Account</p>
+          <h2>我的资料</h2>
+          <div class="account-summary">
+            <span class="avatar-placeholder large-avatar">${currentUser.email.slice(0, 1).toUpperCase()}</span>
+            <div>
+              <strong>${currentUser.email}</strong>
+              <small>${roleLabel(currentUser.role)}</small>
+            </div>
+          </div>
+        </div>
+        <dl class="account-details">
+          <div><dt>Email</dt><dd>${currentUser.email}</dd></div>
+          <div><dt>Role</dt><dd>${currentUser.role}</dd></div>
+          <div><dt>User ID</dt><dd>${currentUser.id}</dd></div>
+        </dl>
+        <div class="account-drawer-actions">
+          <button class="secondary-action interactive-surface" type="button">编辑资料</button>
+          <button class="primary-action interactive-surface" data-auth-logout="true" type="button">退出登录</button>
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
 function renderComposer() {
   return `
     <section class="composer" id="planner">
@@ -155,6 +222,7 @@ function renderFinalPlan() {
         <h2>${plan.name}</h2>
         <p class="lead">${resolvedPlan.sharedDates.length ? `建议日期：${selectedDate}` : "需要进一步协调共同档期"}</p>
         <div class="big-number">${formatCurrency(resolvedPlan.total)}</div>
+        <div class="plan-actions"><button class="secondary-action interactive-surface" data-protected-action="save-plan" type="button">保存方案</button></div>
         <div class="member-list clickable-members">
           ${resolvedPlan.resolvedMembers
             .map(
@@ -257,6 +325,10 @@ function renderProviders() {
                   <div class="provider-title"><h3>${provider.name}</h3><strong>${formatCurrency(provider.price)}</strong></div>
                   <p>${provider.portfolio}</p>
                   <small>${provider.city}${provider.district} · ${provider.availableDates.join(" / ")}</small>
+                  <div class="provider-card-actions">
+                    <span data-protected-action="favorite-card" data-provider-id="${provider.id}">收藏</span>
+                    <span data-protected-action="book-card" data-provider-id="${provider.id}">预约</span>
+                  </div>
                 </div>
               </button>
             `
@@ -297,7 +369,9 @@ function renderProviderProfile() {
           <p>${provider.availableDates.join("、")}</p>
         </div>
         <div class="profile-actions">
-          <button class="primary-action interactive-surface" type="button">生成沟通 Brief</button>
+          <button class="secondary-action interactive-surface" data-protected-action="favorite-provider" data-provider-id="${provider.id}" type="button">收藏服务者</button>
+          <button class="primary-action interactive-surface" data-protected-action="book-provider" data-provider-id="${provider.id}" type="button">立即预约</button>
+          <button class="secondary-action interactive-surface" type="button">生成沟通 Brief</button>
           <button class="secondary-action interactive-surface" data-close-profile="true" type="button">返回</button>
         </div>
       </aside>
@@ -341,6 +415,28 @@ function bindEvents() {
     });
   });
 
+
+  document.querySelectorAll("[data-protected-action]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const actionName = node.dataset.protectedAction;
+      const provider = node.dataset.providerId ? getProviderById(node.dataset.providerId) : null;
+      requireAuth(() => {
+        if (actionName === "save-plan") {
+          showActionFeedback(`已为你保留「${getPlan().name}」方案入口。`);
+          return;
+        }
+        if (actionName === "favorite-provider" || actionName === "favorite-card") {
+          showActionFeedback(`已收藏 ${provider?.name || "该服务者"}。`);
+          return;
+        }
+        if (actionName === "book-provider" || actionName === "book-card") {
+          showActionFeedback(`已进入 ${provider?.name || "该服务者"} 的预约确认入口。`);
+        }
+      });
+    });
+  });
+
   document.querySelectorAll("[data-auth-open]").forEach((button) => {
     button.addEventListener("click", () => {
       authMode = button.dataset.authOpen || "login";
@@ -363,10 +459,44 @@ function bindEvents() {
       if (event.target.dataset.authClose) {
         isAuthModalOpen = false;
         authError = "";
+        pendingAuthAction = null;
         render();
       }
     });
   });
+
+
+
+  document.querySelectorAll("[data-profile-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      isProfileDrawerOpen = true;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-profile-close]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      if (event.target.dataset.profileClose) {
+        isProfileDrawerOpen = false;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-auth-logout]").forEach((button) => {
+    button.addEventListener("click", () => {
+      authStore.logout();
+      isProfileDrawerOpen = false;
+      render();
+    });
+  });
+
+  document.onkeydown = (event) => {
+    if (event.key === "Escape" && isProfileDrawerOpen) {
+      isProfileDrawerOpen = false;
+      render();
+    }
+  };
 
   const authForm = document.querySelector("#auth-form");
   if (authForm) {
@@ -398,11 +528,22 @@ function bindEvents() {
 
       isAuthModalOpen = false;
       authError = "";
+      runPendingAuthAction();
       render();
     });
   }
 }
 
+
+window.openProfileDrawer = function openProfileDrawer() {
+  isProfileDrawerOpen = true;
+  render();
+};
+
+window.closeProfileDrawer = function closeProfileDrawer() {
+  isProfileDrawerOpen = false;
+  render();
+};
 function render() {
   app.innerHTML = `
     <header class="topbar">
@@ -422,8 +563,16 @@ function render() {
     </main>
     ${renderProviderProfile()}
     ${renderAuthModal()}
+    ${renderMyDrawer()}
   `;
   bindEvents();
 }
 
 render();
+
+
+
+
+
+
+
