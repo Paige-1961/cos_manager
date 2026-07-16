@@ -4,6 +4,7 @@ const authStore = window.authStore;
 const profileStore = window.profileStore;
 const profileDrawer = window.profileDrawer;
 const providerData = window.providerData;
+const planStore = window.planStore;
 
 let naturalInput = defaultRequirementRef.rawText;
 let result = runCosPilotPipelineRef(naturalInput);
@@ -30,6 +31,14 @@ function formatCurrency(value) {
   return `¥${Number(value).toLocaleString("zh-CN")}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 function displayDateRange(item) {
   return item.dateStart === item.dateEnd ? item.dateStart : `${item.dateStart} 至 ${item.dateEnd}`;
 }
@@ -50,10 +59,196 @@ function getProviderById(id) {
   return providerData.getProviderById(id);
 }
 
+function getServiceById(providerId, serviceId) {
+  return providerData.getServiceById(providerId, serviceId);
+}
+
+function displayRequirementRange(savedRequirement) {
+  if (!savedRequirement) return "未设置";
+  const start = savedRequirement.dateRange?.start || savedRequirement.dateStart;
+  const end = savedRequirement.dateRange?.end || savedRequirement.dateEnd;
+  if (!start && !end) return "未设置";
+  return start === end ? start : `${start} 至 ${end}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "未记录";
+  return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function getCurrentSavablePlan() {
+  const plan = getPlan();
+  const resolvedPlan = getResolvedPlan();
+  const finalOutput = result.finalPlan || {};
+  return {
+    ...plan,
+    requirement: { ...requirement },
+    resolvedMembers: resolvedPlan.resolvedMembers || plan.resolvedMembers || [],
+    total: resolvedPlan.total || plan.totalPrice || plan.total || 0,
+    totalPrice: plan.totalPrice || resolvedPlan.total || 0,
+    sharedDates: resolvedPlan.sharedDates || plan.sharedDates || [],
+    actions: resolvedPlan.actions || plan.actions || [],
+    warnings: plan.warnings || [],
+    adjustments: plan.adjustments || resolvedPlan.actions || [],
+    selectedDate: finalOutput.selectedDate || getSelectedDate(resolvedPlan),
+    timeline: finalOutput.timeline || [],
+    briefs: finalOutput.briefs || createBriefs(resolvedPlan),
+  };
+}
+
+function saveCurrentPlanForUser() {
+  const currentUser = authStore.getCurrentUser();
+  const outcome = planStore.savePlan(currentUser?.id, getCurrentSavablePlan());
+  if (!outcome.ok) {
+    showActionFeedback(outcome.error || "方案保存失败。");
+    return;
+  }
+  const suffix = outcome.updatedExisting ? "已更新已保存的同一方案。" : "已保存到我的方案。";
+  showActionFeedback(`${suffix} 可在「我的方案」中查看。`);
+}
+
+function getSavedPlanMembers(savedPlan) {
+  const plan = savedPlan?.plan || {};
+  const sourceItems = plan.providers?.length ? plan.providers : plan.resolvedMembers || [];
+  return sourceItems.map((item) => {
+    const providerId = item.providerId || item.id;
+    const serviceId = item.serviceId;
+    const provider = providerId ? getProviderById(providerId) : null;
+    const service = provider && serviceId ? getServiceById(providerId, serviceId) : null;
+    return { ...item, providerId, serviceId, provider, service };
+  });
+}
+
+function renderLoginRequiredState(title = "请先登录") {
+  return `
+    <section class="saved-plan-page provider-empty-state">
+      <article class="panel interactive-surface">
+        <p class="eyebrow">Account</p>
+        <h2>${title}</h2>
+        <p>登录后可以查看你保存过的出片方案。</p>
+        <button class="primary-action interactive-surface" data-auth-open="login" type="button">登录</button>
+      </article>
+    </section>
+  `;
+}
+
+function renderSavedPlansPage() {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return renderLoginRequiredState("查看我的方案前需要登录");
+  const plans = planStore.getPlansByUser(currentUser.id);
+  return `
+    <section class="saved-plan-page">
+      <a class="provider-back-link" href="#">← 返回规划页</a>
+      <div class="section-heading slim-heading">
+        <p class="eyebrow">Saved Plans</p>
+        <h2>我的方案</h2>
+      </div>
+      ${plans.length ? `<div class="saved-plan-grid">${plans.map(renderSavedPlanCard).join("")}</div>` : `<article class="panel interactive-surface empty-saved-plan"><h3>还没有保存的方案</h3><p>生成方案后点击“保存方案”，这里会保留你的历史方案快照。</p></article>`}
+    </section>
+  `;
+}
+
+function renderSavedPlanCard(savedPlan) {
+  const plan = savedPlan.plan || {};
+  const savedRequirement = plan.requirement || {};
+  const members = getSavedPlanMembers(savedPlan);
+  const total = plan.totalPrice || plan.total || 0;
+  return `
+    <article class="saved-plan-card panel interactive-surface">
+      <div>
+        <p class="eyebrow">${escapeHtml(savedRequirement.city || "未设置城市")}</p>
+        <h3>${escapeHtml(savedPlan.title)}</h3>
+      </div>
+      <dl>
+        <div><dt>角色 / 作品</dt><dd>《${escapeHtml(savedRequirement.sourceWork || savedRequirement.fandom || "未设置")}》${escapeHtml(savedRequirement.character || "未设置")}</dd></div>
+        <div><dt>日期</dt><dd>${escapeHtml(displayRequirementRange(savedRequirement))}</dd></div>
+        <div><dt>总预算</dt><dd>${formatCurrency(total)}</dd></div>
+        <div><dt>服务者</dt><dd>${members.length} 位</dd></div>
+        <div><dt>创建时间</dt><dd>${escapeHtml(formatDateTime(savedPlan.createdAt))}</dd></div>
+      </dl>
+      <div class="saved-plan-actions">
+        <a class="primary-action interactive-surface" href="#plan/${encodeURIComponent(savedPlan.id)}">查看方案</a>
+        <button class="secondary-action interactive-surface" data-plan-rename="${escapeHtml(savedPlan.id)}" type="button">修改标题</button>
+        <button class="secondary-action interactive-surface" data-plan-delete="${escapeHtml(savedPlan.id)}" type="button">删除</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSavedPlanDetail(planId) {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return renderLoginRequiredState("查看方案详情前需要登录");
+  const savedPlan = planStore.getPlanById(currentUser.id, planId);
+  if (!savedPlan) return renderPlanNotFoundState();
+  const plan = savedPlan.plan || {};
+  const savedRequirement = plan.requirement || {};
+  const members = getSavedPlanMembers(savedPlan);
+  const total = plan.totalPrice || plan.total || 0;
+  const warnings = plan.warnings || [];
+  const adjustments = plan.adjustments || plan.actions || [];
+  const timeline = plan.timeline || [];
+  const briefs = plan.briefs || [];
+  return `
+    <section class="saved-plan-page saved-plan-detail-page">
+      <a class="provider-back-link" href="#plans">← 返回我的方案</a>
+      <article class="panel saved-plan-detail-hero interactive-surface">
+        <p class="eyebrow">Saved Plan</p>
+        <h2>${escapeHtml(savedPlan.title)}</h2>
+        <div class="provider-stat-grid">
+          <div><span>角色</span><strong>《${escapeHtml(savedRequirement.sourceWork || savedRequirement.fandom || "未设置")}》${escapeHtml(savedRequirement.character || "未设置")}</strong></div>
+          <div><span>地点</span><strong>${escapeHtml(savedRequirement.city || "未设置")}</strong></div>
+          <div><span>日期</span><strong>${escapeHtml(displayRequirementRange(savedRequirement))}</strong></div>
+          <div><span>总价</span><strong>${formatCurrency(total)}</strong></div>
+        </div>
+      </article>
+      <section class="panel interactive-surface">
+        <div class="detail-section-heading"><p class="eyebrow">Providers</p><h3>推荐服务者</h3></div>
+        <div class="saved-provider-list">
+          ${members.map(renderSavedProviderRow).join("") || `<p>该方案没有可恢复的服务者。</p>`}
+        </div>
+      </section>
+      ${(warnings.length || adjustments.length) ? `<section class="panel interactive-surface"><div class="detail-section-heading"><p class="eyebrow">Notes</p><h3>提示与调整</h3></div><ul class="saved-note-list">${[...warnings, ...adjustments].map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>` : ""}
+      ${timeline.length ? `<section class="panel interactive-surface"><div class="detail-section-heading"><p class="eyebrow">Timeline</p><h3>拍摄计划</h3></div><div class="timeline">${timeline.map((item) => `<div><span>${escapeHtml(item.time || item.label || "阶段")}</span><p>${escapeHtml(item.task || item.text || item.description || "待确认")}</p></div>`).join("")}</div></section>` : ""}
+      ${briefs.length ? `<section class="brief-section"><div class="section-heading slim-heading"><p class="eyebrow">Brief</p><h2>沟通文本</h2></div><div class="brief-grid">${briefs.map((brief) => `<article class="brief-card interactive-surface"><button class="brief-target" data-provider-id="${escapeHtml(brief.providerId || "")}" type="button">${escapeHtml(brief.target || "服务者")}</button><p>${escapeHtml(brief.message || "")}</p></article>`).join("")}</div></section>` : ""}
+    </section>
+  `;
+}
+
+function renderSavedProviderRow(item) {
+  if (!item.provider) {
+    return `<article class="member-row invalid-provider"><div><span>${escapeHtml(item.category || "服务")}</span><strong>服务者数据已失效</strong><small>${escapeHtml(item.reason || "该 providerId 已无法从当前数据源解析。")}</small></div><b>${formatCurrency(item.price || 0)}</b></article>`;
+  }
+  return `
+    <button class="member-row" data-provider-id="${escapeHtml(item.providerId)}" type="button">
+      <div>
+        <span>${escapeHtml(item.provider.roleLabel || item.category || "服务")}</span>
+        <strong>${escapeHtml(item.provider.name)}</strong>
+        <small>${escapeHtml(item.service?.name || "服务数据已失效")} · ${escapeHtml(item.matchedDate || "档期待确认")}</small>
+      </div>
+      <b>${formatCurrency(item.service?.price || item.price || 0)}</b>
+    </button>
+  `;
+}
+
+function renderPlanNotFoundState() {
+  return `
+    <section class="saved-plan-page provider-empty-state">
+      <article class="panel interactive-surface">
+        <p class="eyebrow">Saved Plan</p>
+        <h2>未找到该方案</h2>
+        <p>该方案不存在，或不属于当前登录用户。</p>
+        <a class="primary-action interactive-surface" href="#plans">返回我的方案</a>
+      </article>
+    </section>
+  `;
+}
 function getCurrentRoute() {
   const hash = window.location.hash.replace(/^#/, "");
   const providerMatch = hash.match(/^provider\/(.+)$/);
   if (providerMatch) return { name: "provider", providerId: decodeURIComponent(providerMatch[1]) };
+  const planMatch = hash.match(/^plan\/(.+)$/);
+  if (planMatch) return { name: "plan", planId: decodeURIComponent(planMatch[1]) };
+  if (hash === "plans") return { name: "plans" };
   return { name: "home" };
 }
 
@@ -63,10 +258,15 @@ function navigateToProvider(providerId) {
 }
 
 function syncRouteState(route) {
-  const routeKey = route.name === "provider" ? `${route.name}:${route.providerId}` : route.name;
+  const routeKey = route.name === "provider" ? `${route.name}:${route.providerId}` : route.name === "plan" ? `${route.name}:${route.planId}` : route.name;
   if (routeKey === lastRouteKey) return;
   lastRouteKey = routeKey;
   if (route.name === "provider") activeProviderTab = "works";
+  if ((route.name === "plans" || route.name === "plan") && !authStore.isAuthenticated()) {
+    authMode = "login";
+    authError = "";
+    isAuthModalOpen = true;
+  }
 }
 
 function createBriefs(resolvedPlan) {
@@ -600,7 +800,7 @@ function bindEvents() {
       const provider = node.dataset.providerId ? getProviderById(node.dataset.providerId) : null;
       requireAuth(() => {
         if (actionName === "save-plan") {
-          showActionFeedback(`已为你保留「${getPlan().name}」方案入口。`);
+          saveCurrentPlanForUser();
           return;
         }
         if (actionName === "favorite-provider" || actionName === "favorite-card") {
@@ -662,6 +862,35 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-my-plans]").forEach((button) => {
+    button.addEventListener("click", () => {
+      isProfileDrawerOpen = false;
+      resetProfileUiState();
+      window.location.hash = "plans";
+    });
+  });
+
+  document.querySelectorAll("[data-plan-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const currentUser = authStore.getCurrentUser();
+      if (!currentUser) return;
+      if (!window.confirm("确定删除这个已保存方案吗？")) return;
+      planStore.deletePlan(currentUser.id, button.dataset.planDelete);
+      showActionFeedback("已删除该方案。");
+    });
+  });
+
+  document.querySelectorAll("[data-plan-rename]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const currentUser = authStore.getCurrentUser();
+      if (!currentUser) return;
+      const savedPlan = planStore.getPlanById(currentUser.id, button.dataset.planRename);
+      const nextTitle = window.prompt("修改方案标题", savedPlan?.title || "");
+      if (nextTitle === null) return;
+      const outcome = planStore.updatePlanTitle(currentUser.id, button.dataset.planRename, nextTitle);
+      showActionFeedback(outcome.ok ? "方案标题已更新。" : outcome.error);
+    });
+  });
   document.querySelectorAll("[data-auth-logout]").forEach((button) => {
     button.addEventListener("click", () => {
       authStore.logout();
@@ -841,6 +1070,12 @@ function renderMainContent(route) {
   if (route.name === "provider") {
     return renderProviderProfile(route.providerId);
   }
+  if (route.name === "plans") {
+    return renderSavedPlansPage();
+  }
+  if (route.name === "plan") {
+    return renderSavedPlanDetail(route.planId);
+  }
 
   return `
       ${renderComposer()}
@@ -875,6 +1110,13 @@ function render() {
 
 window.addEventListener("hashchange", render);
 render();
+
+
+
+
+
+
+
 
 
 

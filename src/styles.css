@@ -1964,3 +1964,103 @@ button.plan-card {
   margin: 0;
   font-size: clamp(34px, 5vw, 52px);
 }
+
+/* Saved plans */
+.saved-plan-page {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 36px 0 72px;
+}
+
+.saved-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.saved-plan-card {
+  display: grid;
+  gap: 18px;
+}
+
+.saved-plan-card h3,
+.saved-plan-detail-hero h2,
+.empty-saved-plan h3 {
+  margin: 0;
+}
+
+.saved-plan-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.saved-plan-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.saved-plan-card dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.saved-plan-card dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 850;
+  text-align: right;
+}
+
+.saved-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.saved-plan-actions a {
+  text-decoration: none;
+}
+
+.saved-plan-detail-page {
+  display: grid;
+  gap: 18px;
+}
+
+.saved-provider-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-note-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.invalid-provider {
+  opacity: 0.78;
+}
+
+.empty-saved-plan {
+  max-width: 680px;
+}
+
+@media (max-width: 900px) {
+  .saved-plan-page {
+    width: min(100% - 28px, 720px);
+    padding-top: 24px;
+  }
+
+  .saved-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}

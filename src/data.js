@@ -17,7 +17,7 @@ const roleRequirements = [
   { role: "wig", label: "毛娘/假发", neededWhenMissing: ["假发", "发型"] },
   { role: "photographer", label: "摄影师", neededWhenMissing: ["摄影"] },
   { role: "studio", label: "摄影棚", neededWhenMissing: ["场地"] },
-  { role: "retouch", label: "后期", optional: true, neededWhenMissing: ["后期"] },
+  { role: "retoucher", label: "后期", optional: true, neededWhenMissing: ["后期"] },
 ];
 
 
