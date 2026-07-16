@@ -578,8 +578,10 @@ function bindEvents() {
         render();
         return;
       }
-      resetPasswordModal();
-      showActionFeedback("密码已更新。");
+      authStore.logout();
+      isProfileDrawerOpen = false;
+      resetProfileUiState();
+      showActionFeedback("密码已更新，请使用新密码重新登录。");
     });
   }
   document.querySelectorAll("[data-profile-edit]").forEach((button) => {
