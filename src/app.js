@@ -3,6 +3,7 @@ const runCosPilotPipelineRef = window.runCosPilotPipeline;
 const authStore = window.authStore;
 const profileStore = window.profileStore;
 const profileDrawer = window.profileDrawer;
+const providerData = window.providerData;
 
 let naturalInput = defaultRequirementRef.rawText;
 let result = runCosPilotPipelineRef(naturalInput);
@@ -20,6 +21,8 @@ let isPasswordModalOpen = false;
 let passwordError = "";
 let pendingAuthAction = null;
 let actionFeedback = "";
+let activeProviderTab = "works";
+let lastRouteKey = "";
 
 const app = document.querySelector("#app");
 
@@ -44,13 +47,32 @@ function getSelectedDate(resolvedPlan) {
 }
 
 function getProviderById(id) {
-  return window.serviceProviders.find((provider) => provider.id === id);
+  return providerData.getProviderById(id);
+}
+
+function getCurrentRoute() {
+  const hash = window.location.hash.replace(/^#/, "");
+  const providerMatch = hash.match(/^provider\/(.+)$/);
+  if (providerMatch) return { name: "provider", providerId: decodeURIComponent(providerMatch[1]) };
+  return { name: "home" };
+}
+
+function navigateToProvider(providerId) {
+  activeProviderTab = "works";
+  window.location.hash = `provider/${encodeURIComponent(providerId)}`;
+}
+
+function syncRouteState(route) {
+  const routeKey = route.name === "provider" ? `${route.name}:${route.providerId}` : route.name;
+  if (routeKey === lastRouteKey) return;
+  lastRouteKey = routeKey;
+  if (route.name === "provider") activeProviderTab = "works";
 }
 
 function createBriefs(resolvedPlan) {
   return resolvedPlan.resolvedMembers.map((member) => ({
     target: `${member.roleLabel}｜${member.name}`,
-    providerId: member.id,
+    providerId: member.providerId || member.id,
     message: `你好，我想在 ${displayDateRange(requirement)} 期间于${requirement.city}拍摄《${requirement.fandom}》${requirement.character}，风格偏${requirement.styleTags.join("/")}。目前已有${requirement.ownedItems.join("、")}，整体预算约 ${formatCurrency(requirement.budget)}。看到你的方向是「${member.portfolio}」，想确认区间内是否可约、价格和准备事项。`,
   }));
 }
@@ -269,7 +291,7 @@ function renderFinalPlan() {
           ${resolvedPlan.resolvedMembers
             .map(
               (member) => `
-                <button class="member-row interactive-surface" data-provider-id="${member.id}" type="button">
+                <button class="member-row interactive-surface" data-provider-id="${member.providerId || member.id}" type="button">
                   <span>${member.roleLabel}</span>
                   <strong>${member.name}</strong>
                   <small>${member.reasons?.join(" · ") || member.note}</small>
@@ -361,15 +383,15 @@ function renderProviders() {
         ${visibleProviders
           .map(
             (provider) => `
-              <button class="provider-card interactive-surface" data-provider-id="${provider.id}" type="button">
+              <button class="provider-card interactive-surface" data-provider-id="${provider.providerId || provider.id}" type="button">
                 <div class="provider-art" style="--accent:${provider.accent}"><span>${provider.roleLabel}</span></div>
                 <div class="provider-body">
                   <div class="provider-title"><h3>${provider.name}</h3><strong>${formatCurrency(provider.price)}</strong></div>
                   <p>${provider.portfolio}</p>
                   <small>${provider.city}${provider.district} · ${provider.availableDates.join(" / ")}</small>
                   <div class="provider-card-actions">
-                    <span data-protected-action="favorite-card" data-provider-id="${provider.id}">收藏</span>
-                    <span data-protected-action="book-card" data-provider-id="${provider.id}">预约</span>
+                    <span data-protected-action="favorite-card" data-provider-id="${provider.providerId || provider.id}">收藏</span>
+                    <span data-protected-action="book-card" data-provider-id="${provider.providerId || provider.id}">预约</span>
                   </div>
                 </div>
               </button>
@@ -381,56 +403,171 @@ function renderProviders() {
   `;
 }
 
-function renderProviderProfile() {
-  if (!activeProviderId) return "";
-  const provider = getProviderById(activeProviderId);
-  if (!provider) return "";
+function providerAvatar(provider, sizeClass = "provider-detail-avatar") {
+  if (provider.avatar) return `<img class="${sizeClass}" src="${provider.avatar}" alt="${provider.name} 头像" />`;
+  return `<span class="${sizeClass} avatar-placeholder">${provider.name.slice(0, 1).toUpperCase()}</span>`;
+}
+
+function providerTabButton(tab, label) {
+  return `<button class="${activeProviderTab === tab ? "active" : ""}" data-provider-tab="${tab}" type="button">${label}</button>`;
+}
+
+function renderProviderEmptyState() {
   return `
-    <div class="profile-backdrop" data-close-profile="true">
-      <aside class="provider-profile interactive-surface" role="dialog" aria-label="${provider.name} 服务者主页">
-        <button class="profile-close" data-close-profile="true" type="button">×</button>
-        <div class="profile-hero" style="--accent:${provider.accent}">
-          <span>${provider.roleLabel}</span>
-          <h2>${provider.name}</h2>
-          <p>${provider.city}${provider.district} · ${formatCurrency(provider.price)} 起 · 评分 ${provider.rating}</p>
-        </div>
-        <div class="profile-section">
-          <h3>主页简介</h3>
-          <p>${provider.note}</p>
-        </div>
-        <div class="profile-section">
-          <h3>作品方向</h3>
-          <div class="tag-row">${provider.portfolio.split(" / ").map((item) => `<span>${item}</span>`).join("")}</div>
-        </div>
-        <div class="profile-section">
-          <h3>风格标签</h3>
-          <div class="tag-row">${provider.styles.map((style) => `<span>${style}</span>`).join("")}</div>
-        </div>
-        <div class="profile-section">
-          <h3>可约时间</h3>
-          <p>${provider.availableDates.join("、")}</p>
-        </div>
-        <div class="profile-actions">
-          <button class="secondary-action interactive-surface" data-protected-action="favorite-provider" data-provider-id="${provider.id}" type="button">收藏服务者</button>
-          <button class="primary-action interactive-surface" data-protected-action="book-provider" data-provider-id="${provider.id}" type="button">立即预约</button>
-          <button class="secondary-action interactive-surface" type="button">生成沟通 Brief</button>
-          <button class="secondary-action interactive-surface" data-close-profile="true" type="button">返回</button>
-        </div>
-      </aside>
-    </div>
+    <section class="provider-page provider-empty-state">
+      <div class="panel">
+        <p class="eyebrow">Provider</p>
+        <h2>未找到该服务者</h2>
+        <p>该服务者可能已下架，或链接中的 providerId 不正确。</p>
+        <a class="primary-action interactive-surface" href="#providers">返回服务者列表</a>
+      </div>
+    </section>
   `;
 }
 
+function portfolioMeta(provider, item, index) {
+  const tags = item.tags || [];
+  return {
+    role: tags[0] || provider.roleLabel,
+    work: tags[1] || provider.portfolio || provider.name,
+    location: `${provider.city}${provider.district}` || "未设置",
+    style: tags.join(" / ") || provider.styles.slice(0, 2).join(" / "),
+    likes: 24 + index * 9 + Math.round(provider.rating),
+    comments: 3 + index * 2,
+  };
+}
+
+function renderProviderTabContent(provider, services, portfolioItems, reviews) {
+  if (activeProviderTab === "services") {
+    return `
+      <section class="profile-section detail-section" id="provider-services">
+        <div class="detail-section-heading"><p class="eyebrow">Services</p><h3>服务项目</h3></div>
+        <div class="service-list">${services.map((service) => `<article><div><strong>${service.name}</strong><small>${service.duration}</small></div><b>${formatCurrency(service.price)}</b></article>`).join("")}</div>
+      </section>
+    `;
+  }
+  if (activeProviderTab === "reviews") {
+    return `
+      <section class="profile-section detail-section" id="provider-reviews">
+        <div class="detail-section-heading"><p class="eyebrow">Reviews</p><h3>评价</h3></div>
+        <div class="review-list">${reviews.map((review) => `<article><strong>${review.author} · ${review.rating}</strong><p>${review.content}</p></article>`).join("")}</div>
+      </section>
+    `;
+  }
+  if (activeProviderTab === "schedule") {
+    return `
+      <section class="profile-section detail-section" id="provider-schedule">
+        <div class="detail-section-heading"><p class="eyebrow">Schedule</p><h3>档期</h3></div>
+        <div class="schedule-row">${provider.availableDates.map((date) => `<span>${date}</span>`).join("")}</div>
+      </section>
+    `;
+  }
+  if (activeProviderTab === "about") {
+    return `
+      <section class="profile-section detail-section" id="provider-about">
+        <div class="detail-section-heading"><p class="eyebrow">About</p><h3>关于我</h3></div>
+        <p>${provider.bio}</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="profile-section detail-section" id="provider-works">
+      <div class="detail-section-heading"><p class="eyebrow">Portfolio</p><h3>作品</h3></div>
+      <div class="portfolio-grid">
+        ${portfolioItems.map((item, index) => {
+          const meta = portfolioMeta(provider, item, index);
+          return `
+            <article class="portfolio-card">
+              <div class="portfolio-art" style="--accent:${provider.accent}"><span>${item.title.slice(0, 1)}</span></div>
+              <div class="portfolio-card-body">
+                <strong>${item.title}</strong>
+                <dl>
+                  <div><dt>角色</dt><dd>${meta.role}</dd></div>
+                  <div><dt>作品</dt><dd>${meta.work}</dd></div>
+                  <div><dt>地点</dt><dd>${meta.location}</dd></div>
+                  <div><dt>风格</dt><dd>${meta.style}</dd></div>
+                </dl>
+                <small>${meta.likes} 赞 · ${meta.comments} 评论</small>
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderProviderProfile(providerId) {
+  const provider = getProviderById(providerId);
+  if (!provider) return renderProviderEmptyState();
+  const resolvedProviderId = provider.providerId || provider.id;
+  const services = provider.services || [];
+  const portfolioItems = provider.portfolioItems || [];
+  const reviews = provider.reviews || [];
+  return `
+    <section class="provider-page" aria-label="${provider.name} 服务者主页">
+      <a class="provider-back-link" href="#providers">← 返回服务者列表</a>
+      <div class="provider-detail-shell">
+          <main class="provider-detail-main">
+            <section class="provider-detail-hero panel" style="--accent:${provider.accent}">
+              <div class="provider-identity">
+                ${providerAvatar(provider)}
+                <div>
+                  <div class="provider-meta-row"><span class="verified-badge">已认证</span><span>${provider.roleLabel}</span></div>
+                  <h2>${provider.name}</h2>
+                  <p>${provider.bio}</p>
+                </div>
+              </div>
+              <div class="provider-stat-grid">
+                <div><span>地点</span><strong>${provider.city}${provider.district}</strong></div>
+                <div><span>起步价</span><strong>${formatCurrency(provider.priceFrom)}</strong></div>
+                <div><span>评分</span><strong>${provider.rating}</strong></div>
+                <div><span>已服务</span><strong>${provider.completedOrders}</strong></div>
+              </div>
+              <div class="tag-row">${provider.styles.map((style) => `<span>${style}</span>`).join("")}</div>
+              <div class="profile-actions inline-actions">
+                <button class="secondary-action interactive-surface" data-protected-action="favorite-provider" data-provider-id="${resolvedProviderId}" type="button">收藏</button>
+                <button class="primary-action interactive-surface" data-protected-action="book-provider" data-provider-id="${resolvedProviderId}" type="button">立即预约</button>
+              </div>
+            </section>
+
+            <nav class="provider-detail-tabs" aria-label="服务者详情导航">
+              ${providerTabButton("works", "作品")}
+              ${providerTabButton("services", "服务项目")}
+              ${providerTabButton("reviews", "评价")}
+              ${providerTabButton("schedule", "档期")}
+              ${providerTabButton("about", "关于我")}
+            </nav>
+
+            ${renderProviderTabContent(provider, services, portfolioItems, reviews)}
+          </main>
+
+          <aside class="provider-booking-card panel">
+            <p class="eyebrow">Booking</p>
+            <h3>${formatCurrency(provider.priceFrom)} 起</h3>
+            <p>${provider.city}${provider.district} · ${provider.reviewCount} 条评价 · 已服务 ${provider.completedOrders}</p>
+            <div class="service-list compact-service-list">${services.slice(0, 2).map((service) => `<article data-service-id="${service.id}"><div><strong>${service.name}</strong><small>${service.duration}</small></div><b>${formatCurrency(service.price)}</b></article>`).join("")}</div>
+            <button class="primary-action interactive-surface" data-protected-action="book-provider" data-provider-id="${resolvedProviderId}" type="button">立即预约</button>
+            <button class="secondary-action interactive-surface" data-protected-action="favorite-provider" data-provider-id="${resolvedProviderId}" type="button">收藏服务者</button>
+          </aside>
+      </div>
+    </section>
+  `;
+}
 function bindEvents() {
-  document.querySelector("#natural-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    naturalInput = new FormData(event.currentTarget).get("naturalInput").trim();
-    result = runCosPilotPipelineRef(naturalInput);
-    requirement = result.requirement;
-    selectedPlanIndex = 0;
-    activeProviderId = null;
-    render();
-  });
+  const naturalForm = document.querySelector("#natural-form");
+  if (naturalForm) {
+    naturalForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      naturalInput = new FormData(event.currentTarget).get("naturalInput").trim();
+      result = runCosPilotPipelineRef(naturalInput);
+      requirement = result.requirement;
+      selectedPlanIndex = 0;
+      activeProviderId = null;
+      render();
+    });
+  }
 
   document.querySelectorAll("[data-plan-index]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -441,22 +578,20 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll("[data-provider-id]").forEach((button) => {
+  document.querySelectorAll("[data-provider-tab]").forEach((button) => {
     button.addEventListener("click", () => {
-      activeProviderId = button.dataset.providerId;
+      activeProviderTab = button.dataset.providerTab || "works";
       render();
     });
   });
 
-  document.querySelectorAll("[data-close-profile]").forEach((node) => {
-    node.addEventListener("click", (event) => {
-      if (event.target.dataset.closeProfile) {
-        activeProviderId = null;
-        render();
-      }
+  document.querySelectorAll("[data-provider-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.protectedAction) return;
+      activeProviderId = button.dataset.providerId;
+      navigateToProvider(button.dataset.providerId);
     });
   });
-
 
   document.querySelectorAll("[data-protected-action]").forEach((node) => {
     node.addEventListener("click", (event) => {
@@ -702,7 +837,24 @@ window.closeProfileDrawer = function closeProfileDrawer() {
   resetProfileUiState();
   render();
 };
+function renderMainContent(route) {
+  if (route.name === "provider") {
+    return renderProviderProfile(route.providerId);
+  }
+
+  return `
+      ${renderComposer()}
+      ${renderParsedSummary()}
+      ${renderFinalPlan()}
+      ${renderPlans()}
+      ${renderBriefs()}
+      <div id="providers">${renderProviders()}</div>
+  `;
+}
+
 function render() {
+  const route = getCurrentRoute();
+  syncRouteState(route);
   app.innerHTML = `
     <header class="topbar">
       <a class="brand" href="#"><span>CP</span><strong>CosPilot</strong></a>
@@ -712,14 +864,8 @@ function render() {
       </div>
     </header>
     <main>
-      ${renderComposer()}
-      ${renderParsedSummary()}
-      ${renderFinalPlan()}
-      ${renderPlans()}
-      ${renderBriefs()}
-      <div id="providers">${renderProviders()}</div>
+      ${renderMainContent(route)}
     </main>
-    ${renderProviderProfile()}
     ${renderAuthModal()}
     ${renderMyDrawer()}
     ${renderActionFeedback()}
@@ -727,6 +873,7 @@ function render() {
   bindEvents();
 }
 
+window.addEventListener("hashchange", render);
 render();
 
 

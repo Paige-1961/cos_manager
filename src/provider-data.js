@@ -1,0 +1,252 @@
+﻿(function () {
+  const CATEGORY_LABELS = {
+    makeup: "妆娘",
+    photographer: "摄影师",
+    studio: "摄影棚",
+    wig: "毛娘/假发",
+    retouch: "后期",
+  };
+
+  const providerSeed = [
+    {
+      id: "provider-mu-chen",
+      legacyId: "mu-chen",
+      userId: "provider-user-mu-chen",
+      name: "暮辰妆造",
+      category: "makeup",
+      avatar: null,
+      bio: "擅长冷白皮、眼妆结构和角色还原。",
+      location: { city: "北京", district: "朝阳", mode: "onsite" },
+      styles: ["电影感", "冷色调", "崩铁", "精致妆面"],
+      priceFrom: 260,
+      rating: 4.8,
+      reviewCount: 42,
+      completedOrders: 86,
+      availableDates: ["2026-07-16", "2026-07-18", "2026-07-20"],
+      accent: "#6d8cff",
+      services: [{ id: "svc-mu-chen-makeup", name: "角色妆造", category: "makeup", price: 260, duration: "约 2 小时" }],
+      portfolio: [
+        { id: "pf-mu-chen-silverwolf", title: "银狼", tags: ["崩铁", "冷色调"] },
+        { id: "pf-mu-chen-jingliu", title: "镜流", tags: ["冷白皮", "精致妆面"] },
+        { id: "pf-mu-chen-furina", title: "芙宁娜", tags: ["角色还原"] },
+      ],
+      reviews: [{ id: "rv-mu-chen-1", author: "Aki", rating: 5, content: "妆面很稳，眼妆非常还原。" }],
+    },
+    {
+      id: "provider-nanako",
+      legacyId: "nanako",
+      userId: "provider-user-nanako",
+      name: "Nanako 妆造",
+      category: "makeup",
+      avatar: null,
+      bio: "价格友好，适合轻量棚拍和漫展妆。",
+      location: { city: "北京", district: "海淀", mode: "onsite" },
+      styles: ["甜系", "日常感", "动漫"],
+      priceFrom: 180,
+      rating: 4.5,
+      reviewCount: 31,
+      completedOrders: 64,
+      availableDates: ["2026-07-17", "2026-07-18"],
+      accent: "#f476a1",
+      services: [{ id: "svc-nanako-makeup", name: "轻量妆造", category: "makeup", price: 180, duration: "约 1.5 小时" }],
+      portfolio: [
+        { id: "pf-nanako-miku", title: "初音", tags: ["甜系"] },
+        { id: "pf-nanako-marin", title: "喜多川海梦", tags: ["动漫"] },
+        { id: "pf-nanako-ai", title: "星野爱", tags: ["日常感"] },
+      ],
+      reviews: [{ id: "rv-nanako-1", author: "Momo", rating: 4.5, content: "预算友好，沟通很顺。" }],
+    },
+    {
+      id: "provider-zero-lens",
+      legacyId: "zero-lens",
+      userId: "provider-user-zero-lens",
+      name: "Zero Lens",
+      category: "photographer",
+      avatar: null,
+      bio: "强灯光控制，适合剧情感、暗调和科幻布景拍摄。",
+      location: { city: "北京", district: "东城", mode: "onsite" },
+      styles: ["电影感", "暗调", "游戏", "棚拍"],
+      priceFrom: 360,
+      rating: 4.9,
+      reviewCount: 58,
+      completedOrders: 112,
+      availableDates: ["2026-07-18", "2026-07-21"],
+      accent: "#0f766e",
+      services: [{ id: "svc-zero-lens-shoot", name: "棚拍摄影", category: "photographer", price: 360, duration: "2 小时起" }],
+      portfolio: [
+        { id: "pf-zero-dark", title: "暗调棚拍", tags: ["暗调", "棚拍"] },
+        { id: "pf-zero-cyber", title: "赛博布光", tags: ["游戏", "电影感"] },
+        { id: "pf-zero-story", title: "剧情感人像", tags: ["电影感"] },
+      ],
+      reviews: [{ id: "rv-zero-1", author: "Lynn", rating: 5, content: "灯光和构图很专业。" }],
+    },
+    {
+      id: "provider-light-river",
+      legacyId: "light-river",
+      userId: "provider-user-light-river",
+      name: "Light River",
+      category: "photographer",
+      avatar: null,
+      bio: "适合清透、自然光、外景和低预算拍摄。",
+      location: { city: "北京", district: "通州", mode: "onsite" },
+      styles: ["清透", "自然光", "动漫", "外景"],
+      priceFrom: 260,
+      rating: 4.6,
+      reviewCount: 37,
+      completedOrders: 73,
+      availableDates: ["2026-07-17", "2026-07-18", "2026-07-19"],
+      accent: "#3b82f6",
+      services: [{ id: "svc-light-river-location", name: "自然光外景", category: "photographer", price: 260, duration: "2 小时起" }],
+      portfolio: [
+        { id: "pf-light-location", title: "自然光外景", tags: ["自然光"] },
+        { id: "pf-light-clear", title: "清透人像", tags: ["清透"] },
+        { id: "pf-light-event", title: "漫展跟拍", tags: ["动漫"] },
+      ],
+      reviews: [{ id: "rv-light-1", author: "Kira", rating: 4.5, content: "出片轻快自然。" }],
+    },
+    {
+      id: "provider-noir-studio",
+      legacyId: "noir-studio",
+      userId: "provider-user-noir-studio",
+      name: "Noir Studio",
+      category: "studio",
+      avatar: null,
+      bio: "两小时起租，适合科幻与游戏角色。",
+      location: { city: "北京", district: "朝阳", mode: "venue" },
+      styles: ["电影感", "暗调", "机械", "棚拍"],
+      priceFrom: 160,
+      rating: 4.7,
+      reviewCount: 44,
+      completedOrders: 91,
+      availableDates: ["2026-07-18", "2026-07-19"],
+      accent: "#475569",
+      services: [{ id: "svc-noir-studio-rent", name: "黑箱棚租赁", category: "studio", price: 160, duration: "2 小时起" }],
+      portfolio: [
+        { id: "pf-noir-blackbox", title: "黑箱棚", tags: ["暗调"] },
+        { id: "pf-noir-metal", title: "金属布景", tags: ["机械"] },
+        { id: "pf-noir-light", title: "可控灯", tags: ["棚拍"] },
+      ],
+      reviews: [{ id: "rv-noir-1", author: "Zero", rating: 4.7, content: "棚景适合暗调角色。" }],
+    },
+    {
+      id: "provider-mori-studio",
+      legacyId: "mori-studio",
+      userId: "provider-user-mori-studio",
+      name: "Mori Studio",
+      category: "studio",
+      avatar: null,
+      bio: "预算友好，适合明亮风格。",
+      location: { city: "北京", district: "丰台", mode: "venue" },
+      styles: ["清透", "日系", "自然光"],
+      priceFrom: 120,
+      rating: 4.4,
+      reviewCount: 25,
+      completedOrders: 52,
+      availableDates: ["2026-07-17", "2026-07-18", "2026-07-20"],
+      accent: "#16a34a",
+      services: [{ id: "svc-mori-studio-rent", name: "白棚租赁", category: "studio", price: 120, duration: "2 小时起" }],
+      portfolio: [
+        { id: "pf-mori-white", title: "白棚", tags: ["清透"] },
+        { id: "pf-mori-window", title: "木质窗景", tags: ["日系"] },
+        { id: "pf-mori-flower", title: "花墙", tags: ["自然光"] },
+      ],
+      reviews: [{ id: "rv-mori-1", author: "Sora", rating: 4.4, content: "性价比不错。" }],
+    },
+    {
+      id: "provider-wig-lab",
+      legacyId: "wig-lab",
+      userId: "provider-user-wig-lab",
+      name: "Wig Lab",
+      category: "wig",
+      avatar: null,
+      bio: "可做快速修毛和拍摄前定型。",
+      location: { city: "北京", district: "海淀", mode: "onsite" },
+      styles: ["游戏", "高还原", "定型"],
+      priceFrom: 130,
+      rating: 4.6,
+      reviewCount: 29,
+      completedOrders: 68,
+      availableDates: ["2026-07-15", "2026-07-16", "2026-07-18"],
+      accent: "#a855f7",
+      services: [{ id: "svc-wig-lab-styling", name: "假发修毛定型", category: "wig", price: 130, duration: "约 1 小时" }],
+      portfolio: [
+        { id: "pf-wig-silverwolf", title: "银狼", tags: ["游戏"] },
+        { id: "pf-wig-danheng", title: "丹恒", tags: ["高还原"] },
+        { id: "pf-wig-herta", title: "黑塔", tags: ["定型"] },
+      ],
+      reviews: [{ id: "rv-wig-1", author: "Nana", rating: 4.6, content: "定型速度快。" }],
+    },
+    {
+      id: "provider-afterglow",
+      legacyId: "afterglow",
+      userId: "provider-user-afterglow",
+      name: "Afterglow 后期",
+      category: "retouch",
+      avatar: null,
+      bio: "远程交付，可作为预算有余时的增强项。",
+      location: { city: "北京", district: "远程", mode: "remote" },
+      styles: ["电影感", "暗调", "肤色修正"],
+      priceFrom: 90,
+      rating: 4.5,
+      reviewCount: 22,
+      completedOrders: 49,
+      availableDates: ["2026-07-19", "2026-07-20", "2026-07-22"],
+      accent: "#ea580c",
+      services: [{ id: "svc-afterglow-retouch", name: "人像精修调色", category: "retouch", price: 90, duration: "远程交付" }],
+      portfolio: [
+        { id: "pf-afterglow-cyber", title: "赛博调色", tags: ["电影感"] },
+        { id: "pf-afterglow-composite", title: "氛围合成", tags: ["暗调"] },
+        { id: "pf-afterglow-portrait", title: "人像精修", tags: ["肤色修正"] },
+      ],
+      reviews: [{ id: "rv-afterglow-1", author: "Haru", rating: 4.5, content: "调色氛围很好。" }],
+    },
+  ];
+
+  function portfolioLabel(provider) {
+    return provider.portfolio.map((item) => item.title).join(" / ");
+  }
+
+  function normalizeProvider(provider) {
+    return {
+      ...provider,
+      id: provider.legacyId,
+      providerId: provider.id,
+      role: provider.category,
+      roleLabel: CATEGORY_LABELS[provider.category] || provider.category,
+      city: provider.location.city,
+      district: provider.location.district,
+      price: provider.priceFrom,
+      note: provider.bio,
+      portfolioItems: provider.portfolio,
+      portfolio: portfolioLabel(provider),
+    };
+  }
+
+  const providers = providerSeed.map(normalizeProvider);
+
+  function getAllProviders() {
+    return providers.map((provider) => ({ ...provider, services: provider.services.map((service) => ({ ...service })), portfolioItems: provider.portfolioItems.map((item) => ({ ...item })), reviews: provider.reviews.map((review) => ({ ...review })) }));
+  }
+
+  function getProviderById(providerId) {
+    const provider = providers.find((item) => item.id === providerId || item.providerId === providerId);
+    return provider ? { ...provider } : null;
+  }
+
+  function getProvidersByCategory(category) {
+    return getAllProviders().filter((provider) => provider.category === category || provider.role === category);
+  }
+
+  function getServiceById(providerId, serviceId) {
+    const provider = providers.find((item) => item.id === providerId || item.providerId === providerId);
+    return provider?.services.find((service) => service.id === serviceId) || null;
+  }
+
+  window.providerData = {
+    getAllProviders,
+    getProviderById,
+    getProvidersByCategory,
+    getServiceById,
+  };
+  window.serviceProviders = getAllProviders();
+})();
