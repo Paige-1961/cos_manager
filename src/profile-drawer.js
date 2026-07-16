@@ -25,7 +25,7 @@
     return `<span class="avatar-placeholder ${sizeClass}">${initial}</span>`;
   }
 
-  function renderProviderDrawer({ currentUser }) {
+  function renderProviderDrawer({ currentUser, provider }) {
     return `
       <div class="account-drawer-backdrop" data-profile-close="true">
         <aside class="account-drawer interactive-surface" role="dialog" aria-modal="true" aria-label="我的资料">
@@ -34,9 +34,9 @@
             <p class="eyebrow">Account</p>
             <h2>我的资料</h2>
             <div class="account-summary account-summary-card">
-              <span class="avatar-placeholder large-avatar">${escapeHtml(currentUser.email.slice(0, 1).toUpperCase())}</span>
+              ${provider?.avatar ? `<span class="avatar-placeholder large-avatar avatar-image"><img src="${escapeHtml(provider.avatar)}" alt="头像" /></span>` : `<span class="avatar-placeholder large-avatar">${escapeHtml(String(provider?.name || currentUser.email).slice(0, 1).toUpperCase())}</span>`}
               <div>
-                <strong>${escapeHtml(currentUser.email)}</strong>
+                <strong>${escapeHtml(provider?.name || currentUser.email)}</strong>
                 <small>服务者账号</small>
               </div>
             </div>
@@ -48,6 +48,7 @@
             <div class="muted-account-id"><dt>User ID</dt><dd>${escapeHtml(currentUser.id)}</dd></div>
           </dl>
           <div class="account-drawer-actions">
+            <button class="secondary-action interactive-surface" data-provider-dashboard-open="true" type="button">服务者工作台</button>
             <button class="primary-action interactive-surface" data-auth-logout="true" type="button">退出登录</button>
           </div>
         </aside>
@@ -165,5 +166,9 @@
     renderCustomerEdit,
   };
 })();
+
+
+
+
 
 
