@@ -19,7 +19,12 @@
   }
 
   function writeProfiles(profiles) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: "本地存储空间不足，请更换更小的图片后再保存。" };
+    }
   }
 
   function slug(value) {
@@ -146,7 +151,8 @@
     const existing = getStoredProfileByUserId(user.id);
     if (existing) return normalizeProvider(existing);
     const profile = defaultProvider(user);
-    writeProfiles([...readProfiles(), profile]);
+    const outcome = writeProfiles([...readProfiles(), profile]);
+    if (!outcome.ok) return null;
     return normalizeProvider(profile);
   }
 
@@ -181,7 +187,8 @@
     };
     if (index >= 0) profiles[index] = next;
     else profiles.push(next);
-    writeProfiles(profiles);
+    const outcome = writeProfiles(profiles);
+    if (!outcome.ok) return outcome;
     return { ok: true, provider: normalizeProvider(next) };
   }
 
@@ -196,6 +203,19 @@
     const normalizedItems = portfolioItems.map(normalizePortfolioItem);
     return updateProviderProfile(userId, { portfolio: normalizedItems, portfolioItems: normalizedItems });
   }
+
+  function normalizeDates(dates) {
+    return [...new Set((Array.isArray(dates) ? dates : [])
+      .map((date) => String(date || "").trim())
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))]
+      .sort();
+  }
+
+  function updateProviderSchedule(userId, availableDates) {
+    if (!Array.isArray(availableDates)) return { ok: false, error: "档期数据无效。" };
+    return updateProviderProfile(userId, { availableDates: normalizeDates(availableDates) });
+  }
+
   function getPublishedEditableProviders() {
     return readProfiles().filter((profile) => profile.isPublished).map(normalizeProvider);
   }
@@ -223,6 +243,7 @@
     updateProviderProfile,
     updateProviderServices,
     updateProviderPortfolio,
+    updateProviderSchedule,
     getAllProviders,
   };
 
@@ -235,6 +256,10 @@
   };
   window.serviceProviders = getAllProviders();
 })();
+
+
+
+
 
 
 

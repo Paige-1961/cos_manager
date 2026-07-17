@@ -2440,3 +2440,42 @@ button.plan-card {
     grid-template-columns: 1fr;
   }
 }
+
+/* Provider schedule manager */
+.provider-schedule-manager {
+  display: grid;
+  gap: 18px;
+}
+
+.provider-schedule-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.provider-schedule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.provider-schedule-item strong {
+  font-size: 15px;
+}
+
+@media (max-width: 900px) {
+  .provider-schedule-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .provider-schedule-list {
+    grid-template-columns: 1fr;
+  }
+}

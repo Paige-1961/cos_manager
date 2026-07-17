@@ -4,10 +4,22 @@
     { id: "profile", label: "主页资料", title: "主页资料", description: "编辑公开主页的头像、名称、类别、简介、地点、风格标签和价格信息。" },
     { id: "services", label: "服务项目", title: "服务项目", description: "管理公开主页展示的服务项目、价格和时长。" },
     { id: "portfolio", label: "作品管理", title: "作品管理", description: "管理公开主页展示的作品封面、角色、出处和风格。" },
-    { id: "schedule", label: "档期管理", title: "档期管理", description: "下一阶段可在这里维护可预约日期。" },
+    { id: "schedule", label: "档期管理", title: "档期管理", description: "维护公开主页和 Agent 推荐使用的可预约日期。" },
     { id: "preview", label: "预览主页", title: "预览主页", description: "查看当前服务者公开主页的展示效果。" },
   ];
-
+  const REGION_DATA = {
+    "北京": { "北京": ["东城", "西城", "朝阳", "海淀", "丰台", "石景山", "通州", "昌平", "大兴"] },
+    "上海": { "上海": ["黄浦", "徐汇", "长宁", "静安", "普陀", "虹口", "杨浦", "浦东新区", "闵行"] },
+    "广东": { "广州": ["越秀", "天河", "海珠", "番禺", "白云"], "深圳": ["福田", "南山", "罗湖", "宝安", "龙岗"], "佛山": ["禅城", "南海", "顺德"] },
+    "江苏": { "南京": ["玄武", "秦淮", "建邺", "鼓楼", "江宁"], "苏州": ["姑苏", "工业园区", "吴中", "相城"], "无锡": ["梁溪", "滨湖", "新吴"] },
+    "浙江": { "杭州": ["上城", "拱墅", "西湖", "滨江", "萧山"], "宁波": ["海曙", "江北", "鄞州"], "嘉兴": ["南湖", "秀洲"] },
+    "四川": { "成都": ["锦江", "青羊", "武侯", "成华", "高新", "双流"] },
+    "重庆": { "重庆": ["渝中", "江北", "沙坪坝", "九龙坡", "南岸"] },
+    "湖北": { "武汉": ["江岸", "江汉", "武昌", "洪山", "汉阳"] },
+    "湖南": { "长沙": ["芙蓉", "天心", "岳麓", "开福", "雨花"] },
+    "陕西": { "西安": ["新城", "碑林", "莲湖", "雁塔", "未央"] },
+    "天津": { "天津": ["和平", "河东", "河西", "南开", "滨海新区"] }
+  };
   function escapeHtml(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -42,7 +54,12 @@
     return `<button class="provider-dashboard-nav-item ${activeSection === section.id ? "active" : ""}" data-provider-dashboard-section="${section.id}" type="button">${section.label}</button>`;
   }
 
-  function metric(label, value) {
+
+  function todayIso() {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  }  function metric(label, value) {
     return `<article class="provider-dashboard-metric"><span>${label}</span><strong>${value}</strong></article>`;
   }
 
@@ -110,6 +127,45 @@
   }
 
 
+  function optionList(values, selected, placeholder) {
+    const first = `<option value="">${escapeHtml(placeholder)}</option>`;
+    return first + values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+  }
+
+  function provinceOptions(selected) {
+    return optionList(Object.keys(REGION_DATA), selected, "选择省份");
+  }
+
+  function cityOptions(province, selected) {
+    return optionList(Object.keys(REGION_DATA[province] || {}), selected, province ? "选择城市" : "先选择省份");
+  }
+
+  function districtOptions(province, city, selected) {
+    return optionList(REGION_DATA[province]?.[city] || [], selected, city ? "选择区县" : "先选择城市");
+  }
+
+  function splitLocation(value, fallback = {}) {
+    const source = String(value || "").trim();
+    if (!source) return { province: fallback.province || "", city: fallback.city || "", district: fallback.district || "" };
+    for (const [province, cities] of Object.entries(REGION_DATA)) {
+      for (const [city, districts] of Object.entries(cities)) {
+        const district = districts.find((item) => source.includes(item)) || "";
+        if (source.includes(province) || source.includes(city) || district) return { province, city, district };
+      }
+    }
+    return { province: fallback.province || "", city: fallback.city || source, district: fallback.district || "" };
+  }
+
+  function locationSelects(location, prefix = "") {
+    const field = (name) => `${prefix}${name.slice(0, 1).toUpperCase()}${name.slice(1)}`;
+    const names = prefix ? { province: field("province"), city: field("city"), district: field("district") } : { province: "province", city: "city", district: "district" };
+    const scope = prefix ? "provider-portfolio" : "provider-profile";
+    return `
+      <label><span>省</span><select name="${names.province}" data-region-scope="${scope}" data-region-level="province">${provinceOptions(location.province || "")}</select></label>
+      <label><span>市</span><select name="${names.city}" data-region-scope="${scope}" data-region-level="city" ${location.province ? "" : "disabled"} required>${cityOptions(location.province || "", location.city || "")}</select></label>
+      <label><span>区</span><select name="${names.district}" data-region-scope="${scope}" data-region-level="district" ${location.city ? "" : "disabled"}>${districtOptions(location.province || "", location.city || "", location.district || "")}</select></label>
+    `;
+  }
   function categoryOptions(currentCategory) {
     return Object.entries(CATEGORY_LABELS).map(([value, label]) => `<option value="${value}" ${currentCategory === value ? "selected" : ""}>${label}</option>`).join("");
   }
@@ -141,9 +197,7 @@
           <label><span>服务者名称</span><input name="name" value="${escapeHtml(draft.name || "")}" required /></label>
           <label><span>服务类别</span><select name="category" required>${categoryOptions(draft.category || "makeup")}</select></label>
           <label class="wide-field"><span>简介</span><textarea name="bio" rows="4">${escapeHtml(draft.bio || "")}</textarea></label>
-          <label><span>省</span><input name="province" value="${escapeHtml(location.province || "")}" /></label>
-          <label><span>市</span><input name="city" value="${escapeHtml(location.city || "")}" required /></label>
-          <label><span>区</span><input name="district" value="${escapeHtml(location.district || "")}" /></label>
+          ${locationSelects(location)}
           <label class="wide-field"><span>风格标签</span><input name="styles" value="${escapeHtml((draft.styles || []).join("，"))}" placeholder="电影感，暗调，棚拍" /></label>
           <label><span>起步价</span><input name="priceFrom" type="number" min="0" step="1" value="${Number(draft.priceFrom || 0)}" required /></label>
           <label><span>平均回复时间</span><input name="responseTime" value="${escapeHtml(draft.responseTime || "当天回复")}" /></label>
@@ -236,6 +290,7 @@
     const items = provider?.portfolioItems || [];
     const editingItem = items.find((item) => item.id === portfolioState.editingId) || null;
     const draft = portfolioState.draft || editingItem || { title: "", images: [], character: "", sourceWork: "", location: "", styles: [], description: "" };
+    const portfolioLocation = splitLocation(draft.location, provider?.location || {});
     const isEditing = Boolean(editingItem);
     const empty = items.length === 0;
     return `
@@ -258,7 +313,7 @@
             <label><span>作品标题</span><input name="title" value="${escapeHtml(draft.title || "")}" required /></label>
             <label><span>角色</span><input name="character" value="${escapeHtml(draft.character || "")}" /></label>
             <label><span>所属作品</span><input name="sourceWork" value="${escapeHtml(draft.sourceWork || "")}" /></label>
-            <label><span>地点</span><input name="location" value="${escapeHtml(draft.location || "")}" /></label>
+            ${locationSelects(portfolioLocation, "portfolio")}
             <label class="wide-field"><span>风格标签</span><input name="styles" value="${escapeHtml((draft.styles || []).join("，"))}" placeholder="电影感，暗调，棚拍" /></label>
             <label class="wide-field"><span>描述</span><textarea name="description" rows="3">${escapeHtml(draft.description || "")}</textarea></label>
           </div>
@@ -271,16 +326,47 @@
       </section>
     `;
   }
-  function renderContent(provider, activeSection, profileError, serviceState, portfolioState) {
+
+  function renderScheduleManager(provider, scheduleError) {
+    const dates = provider?.availableDates || [];
+    const minDate = todayIso();
+    return `
+      <section class="provider-schedule-manager panel interactive-surface">
+        <div class="provider-form-heading">
+          <p class="eyebrow">Schedule</p>
+          <h3>档期管理</h3>
+          <p>这些日期会展示在公开主页，并参与 Agent 推荐的日期匹配。</p>
+        </div>
+        ${dates.length ? `<div class="provider-schedule-list">${dates.map((date) => `
+          <article class="provider-schedule-item">
+            <strong>${escapeHtml(date)}</strong>
+            <button class="secondary-action interactive-surface" data-provider-schedule-delete="${escapeHtml(date)}" type="button">删除</button>
+          </article>
+        `).join("")}</div>` : `<div class="provider-service-empty"><h4>还没有可预约档期</h4><p>添加日期后，公开主页和推荐结果会同步使用。</p></div>`}
+        <form id="provider-schedule-form" class="provider-service-form">
+          <div class="provider-profile-fields">
+            <label><span>新增可预约日期</span><input name="availableDate" type="date" min="${minDate}" required /></label>
+          </div>
+          ${scheduleError ? `<p class="auth-error">${escapeHtml(scheduleError)}</p>` : ""}
+          <div class="account-drawer-actions provider-form-actions">
+            <button class="primary-action interactive-surface" type="submit">添加档期</button>
+          </div>
+        </form>
+      </section>
+    `;
+  }
+
+  function renderContent(provider, activeSection, profileError, serviceState, portfolioState, scheduleError) {
     const section = SECTIONS.find((item) => item.id === activeSection) || SECTIONS[0];
     if (section.id === "overview") return renderOverview(provider);
     if (section.id === "profile") return renderProfileForm(provider, profileError);
     if (section.id === "services") return renderServicesManager(provider, serviceState);
     if (section.id === "portfolio") return renderPortfolioManager(provider, portfolioState);
+    if (section.id === "schedule") return renderScheduleManager(provider, scheduleError);
     return renderPlaceholder(section, provider);
   }
 
-  function renderDashboard({ currentUser, provider, activeSection, profileError, serviceState, portfolioState }) {
+  function renderDashboard({ currentUser, provider, activeSection, profileError, serviceState, portfolioState, scheduleError }) {
     const section = SECTIONS.find((item) => item.id === activeSection) || SECTIONS[0];
     const providerName = provider?.name || currentUser?.email || "服务者";
     return `
@@ -299,7 +385,7 @@
             <h1>${section.title}</h1>
             <p>${section.description}</p>
           </header>
-          ${renderContent(provider, section.id, profileError, serviceState, portfolioState)}
+          ${renderContent(provider, section.id, profileError, serviceState, portfolioState, scheduleError)}
         </section>
       </section>
     `;
@@ -325,6 +411,12 @@
     renderForbidden,
   };
 })();
+
+
+
+
+
+
 
 
 

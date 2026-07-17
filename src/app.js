@@ -34,6 +34,8 @@ let providerServiceError = "";
 let providerPortfolioEditingId = null;
 let providerPortfolioDraft = null;
 let providerPortfolioError = "";
+let providerScheduleError = "";
+let providerDetailReturnHash = sessionStorage.getItem("cospilot.providerReturnHash") || "providers";
 let lastRouteKey = "";
 
 const app = document.querySelector("#app");
@@ -264,9 +266,18 @@ function getCurrentRoute() {
   return { name: "home" };
 }
 
-function navigateToProvider(providerId) {
+function navigateToProvider(providerId, options = {}) {
   activeProviderTab = "works";
+  providerDetailReturnHash = options.returnTo || "providers";
+  sessionStorage.setItem("cospilot.providerReturnHash", providerDetailReturnHash);
   window.location.hash = `provider/${encodeURIComponent(providerId)}`;
+}
+
+function providerBackLink() {
+  if (providerDetailReturnHash === "provider-dashboard" && authStore.getCurrentUser()?.role === "provider") {
+    return { hash: "provider-dashboard", label: "← 返回工作台" };
+  }
+  return { hash: "providers", label: "← 返回服务者列表" };
 }
 
 function syncRouteState(route) {
@@ -352,7 +363,11 @@ function syncProviderPortfolioDraftFromForm() {
     title: String(formData.get("title") || "").trim(),
     character: String(formData.get("character") || "").trim(),
     sourceWork: String(formData.get("sourceWork") || "").trim(),
-    location: String(formData.get("location") || "").trim(),
+    location: joinRegionParts(
+      String(formData.get("portfolioProvince") || "").trim(),
+      String(formData.get("portfolioCity") || "").trim(),
+      String(formData.get("portfolioDistrict") || "").trim()
+    ),
     styles: parseStyleTags(formData.get("styles")),
     description: String(formData.get("description") || "").trim(),
     images: providerPortfolioDraft?.images || [],
@@ -371,7 +386,22 @@ function saveProviderPortfolioForUser(currentUser, portfolioItems, message) {
   showActionFeedback(message);
   return true;
 }
-function getProviderProfileForUser(user) {
+
+function resetProviderScheduleState() {
+  providerScheduleError = "";
+}
+
+function saveProviderScheduleForUser(currentUser, availableDates, message) {
+  const outcome = providerStore.updateProviderSchedule(currentUser.id, availableDates);
+  if (!outcome.ok) {
+    providerScheduleError = outcome.error || "档期保存失败。";
+    render();
+    return false;
+  }
+  resetProviderScheduleState();
+  showActionFeedback(message);
+  return true;
+}function getProviderProfileForUser(user) {
   if (!user || user.role !== "provider") return null;
   return providerStore.getProviderByUserId(user.id) || providerStore.createDefaultProvider(user);
 }
@@ -383,6 +413,40 @@ function parseStyleTags(value) {
     .filter(Boolean);
 }
 
+
+function readImageFileAsOptimizedDataUrl(file, onLoad) {
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    const source = reader.result;
+    const image = new Image();
+    image.addEventListener("load", () => {
+      const maxSide = 1200;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) {
+        onLoad(source);
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      onLoad(canvas.toDataURL("image/jpeg", 0.82));
+    });
+    image.addEventListener("error", () => onLoad(source));
+    image.src = source;
+  });
+  reader.readAsDataURL(file);
+}
+
+
+function todayIso() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}function joinRegionParts(province, city, district) {
+  return [province, city, district].filter(Boolean).join(" / ");
+}
 function syncProviderDraftFromForm() {
   const form = document.querySelector("#provider-profile-form");
   const currentUser = authStore.getCurrentUser();
@@ -840,7 +904,7 @@ function renderProviderProfile(providerId) {
   const reviews = provider.reviews || [];
   return `
     <section class="provider-page" aria-label="${provider.name} 服务者主页">
-      <a class="provider-back-link" href="#providers">← 返回服务者列表</a>
+      ${(() => { const back = providerBackLink(); return `<a class="provider-back-link" href="#${back.hash}">${back.label}</a>`; })()}
       <div class="provider-detail-shell">
           <main class="provider-detail-main">
             <section class="provider-detail-hero panel" style="--accent:${provider.accent}">
@@ -1038,7 +1102,7 @@ function bindEvents() {
       const currentUser = authStore.getCurrentUser();
       const provider = providerDashboard.getProviderForUser(currentUser?.id);
       if (nextSection === "preview" && provider?.isPublished) {
-        navigateToProvider(provider.providerId || provider.id);
+        navigateToProvider(provider.providerId || provider.id, { returnTo: "provider-dashboard" });
         return;
       }
       activeProviderDashboardSection = nextSection;
@@ -1050,7 +1114,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const currentUser = authStore.getCurrentUser();
       const provider = providerDashboard.getProviderForUser(currentUser?.id);
-      if (provider?.isPublished) navigateToProvider(provider.providerId || provider.id);
+      if (provider?.isPublished) navigateToProvider(provider.providerId || provider.id, { returnTo: "provider-dashboard" });
       else showActionFeedback("请先创建并完善服务者主页。");
     });
   });
@@ -1058,6 +1122,24 @@ function bindEvents() {
   document.querySelectorAll("[data-provider-dashboard-start]").forEach((button) => {
     button.addEventListener("click", () => {
       activeProviderDashboardSection = "profile";
+      render();
+    });
+  });
+  document.querySelectorAll("[data-region-scope]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const form = select.form;
+      if (form && select.dataset.regionLevel === "province") {
+        const cityName = select.dataset.regionScope === "provider-portfolio" ? "portfolioCity" : "city";
+        const districtName = select.dataset.regionScope === "provider-portfolio" ? "portfolioDistrict" : "district";
+        if (form.elements[cityName]) form.elements[cityName].value = "";
+        if (form.elements[districtName]) form.elements[districtName].value = "";
+      }
+      if (form && select.dataset.regionLevel === "city") {
+        const districtName = select.dataset.regionScope === "provider-portfolio" ? "portfolioDistrict" : "district";
+        if (form.elements[districtName]) form.elements[districtName].value = "";
+      }
+      if (select.dataset.regionScope === "provider-portfolio") syncProviderPortfolioDraftFromForm();
+      else syncProviderDraftFromForm();
       render();
     });
   });
@@ -1080,13 +1162,11 @@ function bindEvents() {
         return;
       }
       syncProviderDraftFromForm();
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        providerProfileDraft = { ...(providerProfileDraft || {}), avatar: reader.result };
+      readImageFileAsOptimizedDataUrl(file, (dataUrl) => {
+        providerProfileDraft = { ...(providerProfileDraft || {}), avatar: dataUrl };
         providerProfileError = "";
         render();
       });
-      reader.readAsDataURL(file);
     });
   }
 
@@ -1241,13 +1321,11 @@ function bindEvents() {
         return;
       }
       syncProviderPortfolioDraftFromForm();
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        providerPortfolioDraft = { ...(providerPortfolioDraft || {}), images: [reader.result] };
+      readImageFileAsOptimizedDataUrl(file, (dataUrl) => {
+        providerPortfolioDraft = { ...(providerPortfolioDraft || {}), images: [dataUrl] };
         providerPortfolioError = "";
         render();
       });
-      reader.readAsDataURL(file);
     });
   }
 
@@ -1283,6 +1361,46 @@ function bindEvents() {
       saveProviderPortfolioForUser(currentUser, nextItems, editingId ? "作品已更新，并同步到公开主页。" : "作品已新增，并同步到公开主页。");
     });
   }
+
+  document.querySelectorAll("[data-provider-schedule-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const currentUser = authStore.getCurrentUser();
+      if (!currentUser || currentUser.role !== "provider") return;
+      const provider = getProviderProfileForUser(currentUser);
+      const dates = (provider?.availableDates || []).filter((date) => date !== button.dataset.providerScheduleDelete);
+      saveProviderScheduleForUser(currentUser, dates, "档期已删除，并同步到公开主页与推荐匹配。");
+    });
+  });
+
+  const providerScheduleForm = document.querySelector("#provider-schedule-form");
+  if (providerScheduleForm) {
+    providerScheduleForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const currentUser = authStore.getCurrentUser();
+      if (!currentUser || currentUser.role !== "provider") return;
+      const provider = getProviderProfileForUser(currentUser);
+      const formData = new FormData(providerScheduleForm);
+      const date = String(formData.get("availableDate") || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        providerScheduleError = "请选择有效日期。";
+        render();
+        return;
+      }
+      if (date < todayIso()) {
+        providerScheduleError = "不能添加今天之前的过去日期。";
+        render();
+        return;
+      }
+      const dates = provider?.availableDates || [];
+      if (dates.includes(date)) {
+        providerScheduleError = "这个日期已经在档期中。";
+        render();
+        return;
+      }
+      saveProviderScheduleForUser(currentUser, [...dates, date], "档期已新增，并同步到公开主页与推荐匹配。");
+    });
+  }
+
   document.querySelectorAll("[data-auth-logout]").forEach((button) => {
     button.addEventListener("click", () => {
       authStore.logout();
@@ -1463,7 +1581,7 @@ function renderProviderDashboardPage() {
   if (!currentUser) return renderLoginRequiredState("进入服务者工作台前需要登录");
   if (currentUser.role !== "provider") return providerDashboard.renderForbidden();
   const provider = getProviderProfileForUser(currentUser);
-  return providerDashboard.renderDashboard({ currentUser, provider: providerProfileDraft || provider, activeSection: activeProviderDashboardSection, profileError: providerProfileError, serviceState: { editingId: providerServiceEditingId, draft: providerServiceDraft, error: providerServiceError }, portfolioState: { editingId: providerPortfolioEditingId, draft: providerPortfolioDraft, error: providerPortfolioError } });
+  return providerDashboard.renderDashboard({ currentUser, provider: providerProfileDraft || provider, activeSection: activeProviderDashboardSection, profileError: providerProfileError, serviceState: { editingId: providerServiceEditingId, draft: providerServiceDraft, error: providerServiceError }, portfolioState: { editingId: providerPortfolioEditingId, draft: providerPortfolioDraft, error: providerPortfolioError }, scheduleError: providerScheduleError });
 }
 function renderMainContent(route) {
   if (route.name === "provider") {
@@ -1512,6 +1630,16 @@ function render() {
 
 window.addEventListener("hashchange", render);
 render();
+
+
+
+
+
+
+
+
+
+
 
 
 
