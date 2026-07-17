@@ -401,7 +401,8 @@ function saveProviderScheduleForUser(currentUser, availableDates, message) {
   resetProviderScheduleState();
   showActionFeedback(message);
   return true;
-}function getProviderProfileForUser(user) {
+}
+function getProviderProfileForUser(user) {
   if (!user || user.role !== "provider") return null;
   return providerStore.getProviderByUserId(user.id) || providerStore.createDefaultProvider(user);
 }
@@ -444,7 +445,8 @@ function todayIso() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
-}function joinRegionParts(province, city, district) {
+}
+function joinRegionParts(province, city, district) {
   return [province, city, district].filter(Boolean).join(" / ");
 }
 function syncProviderDraftFromForm() {
