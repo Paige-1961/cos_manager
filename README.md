@@ -8,7 +8,7 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 
 ## 功能
 
-- 自然语言需求输入与本地 fallback 解析。
+- 真实 LLM 需求理解、结构化输出、主动澄清与本地 fallback 解析。
 - 可解释 Agent 工作流：需求解析、缺口识别、服务者筛选、约束检查、方案组合、预算/档期检查、Brief 输出。
 - Customer / Provider 注册、登录、退出与 localStorage 会话恢复。
 - Customer 个人资料查看与编辑。
@@ -40,9 +40,21 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 ## 当前版本限制
 
 - 数据仍为 mock data 与 localStorage，本地浏览器清理缓存后数据会丢失。
-- 未接 Supabase 或真实后端数据库。
+- 账户、基础资料和 Provider 发布数据已支持 Supabase；部分原型业务仍保留 localStorage fallback。
 - 未实现真实预约订单、支付、消息系统和收藏列表。
 - Provider 数据、方案数据、账户数据都保存在浏览器本地，不能跨设备同步。
-- LLM 解析层仍以本地 fallback / 原型逻辑为主，展示前会以本地 Provider 数据校验为准。
+- LLM 不直接推荐 Provider；所有方案仍由本地确定性 Recommendation Engine 生成并校验。Edge Function 不可用时自动使用本地 fallback。
 - 区划选择目前是原型用子集，后续可替换为完整中国区划 JSON。
 - 图片使用 FileReader 转 data URL 存入 localStorage，适合原型验证，不适合作为正式图片存储方案。
+
+## LLM 配置
+
+需求理解通过 Supabase Edge Function `parse-requirement` 调用 OpenAI Responses API。浏览器中只保留函数名和超时时间，不保存 OpenAI API key。
+
+1. 在 Supabase 项目中设置服务端 Secret：`OPENAI_API_KEY`。
+2. 可选设置 `OPENAI_MODEL`；未设置时使用 Edge Function 中的默认模型。
+3. 部署函数：`supabase functions deploy parse-requirement`。
+4. 保持 `src/supabase-config.js` 中的 Supabase URL 与 anon key 配置有效。
+5. API 或 Edge Function 不可用时，页面会自动回退到本地解析，并明确标记“本地 fallback”。
+
+`OPENAI_API_KEY` 不应写入 `src/llm-config.js`、`src/supabase-config.js` 或任何会发送到浏览器的文件。

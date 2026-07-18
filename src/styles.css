@@ -2599,3 +2599,74 @@ button.plan-card {
     text-align: left;
   }
 }
+
+.agent-understanding {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.agent-understanding-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.agent-understanding-heading h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+}
+
+.agent-understanding-heading > span {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.agent-understanding dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.agent-understanding dl div {
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.agent-understanding dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.agent-understanding dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 750;
+}
+
+.agent-clarifications {
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  background: #fff7f8;
+}
+
+.agent-clarifications ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+@media (max-width: 700px) {
+  .agent-understanding dl {
+    grid-template-columns: 1fr;
+  }
+}

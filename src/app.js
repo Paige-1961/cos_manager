@@ -8,6 +8,7 @@ const planStore = window.planStore;
 const bookingStore = window.bookingStore;
 const providerDashboard = window.providerDashboard;
 const providerStore = window.providerStore;
+const requirementAgent = window.requirementAgent;
 
 let naturalInput = defaultRequirementRef.rawText;
 let result = runCosPilotPipelineRef(naturalInput);
@@ -42,6 +43,9 @@ let bookingError = "";
 let providerBookingError = "";
 let providerDetailReturnHash = sessionStorage.getItem("cospilot.providerReturnHash") || "providers";
 let lastRouteKey = "";
+let agentUnderstanding = null;
+let isAgentParsing = false;
+let hasGeneratedPlan = true;
 
 const app = document.querySelector("#app");
 
@@ -731,12 +735,37 @@ function renderComposer() {
         <h1>一句话生成出片方案</h1>
       </div>
       <form id="natural-form" class="natural-form interactive-surface">
-        <textarea name="naturalInput" rows="6" aria-label="自然语言需求">${naturalInput}</textarea>
+        <textarea name="naturalInput" rows="6" aria-label="自然语言需求">${escapeHtml(naturalInput)}</textarea>
         <div class="composer-actions">
-          <button class="primary-action interactive-surface" type="submit">生成方案</button>
+          <button class="primary-action interactive-surface" type="submit" ${isAgentParsing ? "disabled" : ""}>${isAgentParsing ? "正在理解..." : "生成方案"}</button>
           <span>LLM 需求理解层 · 本地规则 fallback</span>
         </div>
       </form>
+    </section>
+  `;
+}
+
+function renderAgentUnderstanding() {
+  if (!agentUnderstanding) return "";
+  const current = agentUnderstanding.requirement;
+  const serviceLabels = { makeup: "妆造", wig: "假发 / 发型", photographer: "摄影", studio: "摄影棚 / 场地", retoucher: "后期" };
+  const dateLabel = current.dateStart ? displayDateRange(current) : "待补充";
+  const fields = [
+    ["作品", current.sourceWork || "待补充"],
+    ["角色", current.character || "待补充"],
+    ["地点", [current.city, current.district].filter(Boolean).join(" / ") || "待补充"],
+    ["时间", dateLabel],
+    ["预算", current.budget === null ? "待补充" : formatCurrency(current.budget)],
+    ["需要服务", current.neededServices.map((item) => serviceLabels[item] || item).join("、") || "待补充"],
+  ];
+  return `
+    <section class="agent-understanding panel" aria-live="polite">
+      <div class="agent-understanding-heading">
+        <div><p class="eyebrow">Requirement Agent</p><h2>我理解你的需求</h2></div>
+        <span>${agentUnderstanding.source === "llm" ? "LLM 理解" : "本地 fallback"}</span>
+      </div>
+      <dl>${fields.map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
+      ${agentUnderstanding.clarificationQuestions.length ? `<div class="agent-clarifications"><strong>还需要你确认</strong><ul>${agentUnderstanding.clarificationQuestions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul></div>` : ""}
     </section>
   `;
 }
@@ -1035,13 +1064,23 @@ function renderProviderProfile(providerId) {
 function bindEvents() {
   const naturalForm = document.querySelector("#natural-form");
   if (naturalForm) {
-    naturalForm.addEventListener("submit", (event) => {
+    naturalForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       naturalInput = new FormData(event.currentTarget).get("naturalInput").trim();
-      result = runCosPilotPipelineRef(naturalInput);
-      requirement = result.requirement;
+      isAgentParsing = true;
+      render();
+      agentUnderstanding = await requirementAgent.understand(naturalInput);
+      requirement = agentUnderstanding.requirement;
       selectedPlanIndex = 0;
       activeProviderId = null;
+      if (agentUnderstanding.canRecommend) {
+        result = runCosPilotPipelineRef(requirement);
+        requirement = result.requirement;
+        hasGeneratedPlan = true;
+      } else {
+        hasGeneratedPlan = false;
+      }
+      isAgentParsing = false;
       render();
     });
   }
@@ -1745,10 +1784,11 @@ function renderMainContent(route) {
 
   return `
       ${renderComposer()}
-      ${renderParsedSummary()}
-      ${renderFinalPlan()}
-      ${renderPlans()}
-      ${renderBriefs()}
+      ${renderAgentUnderstanding()}
+      ${hasGeneratedPlan ? renderParsedSummary() : ""}
+      ${hasGeneratedPlan ? renderFinalPlan() : ""}
+      ${hasGeneratedPlan ? renderPlans() : ""}
+      ${hasGeneratedPlan ? renderBriefs() : ""}
       <div id="providers">${renderProviders()}</div>
   `;
 }
