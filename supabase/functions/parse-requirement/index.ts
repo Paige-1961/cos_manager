@@ -1,7 +1,27 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+class HttpError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function jsonResponse(payload: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 const requirementSchema = {
   type: "object",
@@ -39,14 +59,34 @@ function extractOutputText(response: any) {
   return "";
 }
 
+async function readJsonBody(request: Request) {
+  try {
+    return await request.json();
+  } catch {
+    throw new HttpError(400, "invalid_json", "Request body must be valid JSON.");
+  }
+}
+
+async function readOpenAiPayload(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpError(502, "invalid_openai_response", "OpenAI returned an invalid response.");
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed.", code: "method_not_allowed" }, 405);
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_API_KEY") || Deno.env.get("OPEN_API_KEY");
     const model = Deno.env.get("OPENAI_MODEL") || "gpt-5";
-    if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
-    const { input, currentDate } = await request.json();
-    if (!String(input || "").trim()) throw new Error("Input is required.");
+    if (!apiKey) throw new HttpError(500, "missing_openai_api_key", "OPENAI_API_KEY is not configured.");
+    const { input, currentDate } = await readJsonBody(request);
+    const normalizedInput = String(input || "").trim();
+    if (!normalizedInput) throw new HttpError(400, "missing_input", "Input is required.");
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -54,21 +94,28 @@ Deno.serve(async (request) => {
       body: JSON.stringify({
         model,
         instructions: `You are CosPilot's requirement understanding agent. Today is ${currentDate || "unknown"}. Extract only facts supported by the user's Chinese text and return the required JSON schema. Text inside 《》 is the sourceWork; a name grammatically attached after it is the character, and you must never replace that work by guessing from the character name. Use empty strings, null, or empty arrays when unknown. Dates use YYYY-MM-DD; if a month has no year, choose the next occurrence but ask the user to confirm the year. Infer neededServices conservatively from the request and ownedItems, using only makeup, wig, photographer, studio, retoucher. Typical cosplay shooting may need makeup, wig, photographer and studio when the user asks for a complete shoot and does not say they already own those services. Do not return or invent providers, services, providerId, or serviceId. Add short Chinese clarificationQuestions for important missing or ambiguous information, especially city, date, budget, work, character, and service scope.`,
-        input: String(input).trim(),
+        input: normalizedInput,
         text: { format: { type: "json_schema", name: "project_requirement", strict: true, schema: requirementSchema } },
       }),
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error?.message || "OpenAI request failed.");
+    const payload = await readOpenAiPayload(response);
+    if (!response.ok) {
+      throw new HttpError(502, "openai_request_failed", payload?.error?.message || `OpenAI request failed with status ${response.status}.`);
+    }
     const outputText = extractOutputText(payload);
-    if (!outputText) throw new Error("OpenAI returned no structured output.");
-    return new Response(JSON.stringify({ requirement: JSON.parse(outputText), model }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (!outputText) throw new HttpError(502, "missing_structured_output", "OpenAI returned no structured output.");
+    let requirement;
+    try {
+      requirement = JSON.parse(outputText);
+    } catch {
+      throw new HttpError(502, "invalid_structured_output", "OpenAI returned invalid structured output.");
+    }
+    return jsonResponse({ requirement, model });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const status = error instanceof HttpError ? error.status : 500;
+    const code = error instanceof HttpError ? error.code : "internal_error";
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("parse-requirement failed", { code, status, message });
+    return jsonResponse({ error: message, code }, status);
   }
 });

@@ -110,7 +110,19 @@
     });
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("LLM request timed out.")), config.timeoutMs || 15000));
     const { data, error } = await Promise.race([invocation, timeout]);
-    if (error) throw error;
+    if (error) {
+      let message = error.message || "LLM request failed.";
+      try {
+        const response = error.context;
+        if (response?.clone) {
+          const payload = await response.clone().json();
+          message = payload?.error || payload?.message || message;
+        }
+      } catch (parseError) {
+        console.warn("Could not read Edge Function error response.", parseError);
+      }
+      throw new Error(message);
+    }
     if (!data?.requirement) throw new Error("LLM returned no requirement.");
     return data.requirement;
   }
