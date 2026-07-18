@@ -1,6 +1,7 @@
 ﻿(function () {
   const SECTIONS = [
     { id: "overview", label: "概览", title: "工作台概览", description: "查看公开主页的基础状态和关键运营指标。" },
+    { id: "bookings", label: "预约管理", title: "预约管理", description: "查看客户提交的预约，并接受或拒绝。" },
     { id: "profile", label: "主页资料", title: "主页资料", description: "编辑公开主页的头像、名称、类别、简介、地点、风格标签和价格信息。" },
     { id: "services", label: "服务项目", title: "服务项目", description: "管理公开主页展示的服务项目、价格和时长。" },
     { id: "portfolio", label: "作品管理", title: "作品管理", description: "管理公开主页展示的作品封面、角色、出处和风格。" },
@@ -358,9 +359,55 @@
     `;
   }
 
-  function renderContent(provider, activeSection, profileError, serviceState, portfolioState, scheduleError) {
+  function bookingStatusLabel(status) {
+    return status === "accepted" ? "已接受" : status === "rejected" ? "已拒绝" : "待处理";
+  }
+
+  function renderBookingsManager(bookings, bookingError) {
+    if (!bookings?.length) {
+      return `
+        <section class="panel interactive-surface provider-bookings-manager">
+          <div class="provider-form-heading">
+            <p class="eyebrow">Bookings</p>
+            <h3>还没有收到预约</h3>
+            <p>客户从公开主页提交预约后，会显示在这里。</p>
+          </div>
+        </section>
+      `;
+    }
+    return `
+      <section class="panel interactive-surface provider-bookings-manager">
+        <div class="provider-form-heading">
+          <p class="eyebrow">Bookings</p>
+          <h3>收到的预约</h3>
+          <p>状态更新会同步给预约客户。</p>
+        </div>
+        <div class="booking-list">
+          ${bookings.map((booking) => `
+            <article class="booking-card">
+              <div class="booking-card-heading">
+                <div><strong>预约日期：${escapeHtml(booking.preferredDate)}</strong><small>创建于 ${new Date(booking.createdAt).toLocaleString("zh-CN")}</small></div>
+                <span class="booking-status ${escapeHtml(booking.status)}">${bookingStatusLabel(booking.status)}</span>
+              </div>
+              <dl>
+                <div><dt>服务</dt><dd>${escapeHtml(booking.serviceName || "服务项目已失效")}</dd></div>
+                <div><dt>客户</dt><dd>${escapeHtml(booking.customerLabel || "客户")}</dd></div>
+                <div><dt>关联方案</dt><dd>${escapeHtml(booking.planTitle || "未关联")}</dd></div>
+              </dl>
+              ${booking.note ? `<p>备注：${escapeHtml(booking.note)}</p>` : ""}
+              ${booking.status === "pending" ? `<div class="booking-actions"><button class="primary-action interactive-surface" data-booking-status="accepted" data-booking-id="${escapeHtml(booking.id)}" type="button">接受</button><button class="secondary-action interactive-surface" data-booking-status="rejected" data-booking-id="${escapeHtml(booking.id)}" type="button">拒绝</button></div>` : ""}
+            </article>
+          `).join("")}
+        </div>
+        ${bookingError ? `<p class="auth-error">${escapeHtml(bookingError)}</p>` : ""}
+      </section>
+    `;
+  }
+
+  function renderContent(provider, activeSection, profileError, serviceState, portfolioState, scheduleError, bookingState = {}) {
     const section = SECTIONS.find((item) => item.id === activeSection) || SECTIONS[0];
     if (section.id === "overview") return renderOverview(provider);
+    if (section.id === "bookings") return renderBookingsManager(bookingState.bookings || [], bookingState.error || "");
     if (section.id === "profile") return renderProfileForm(provider, profileError);
     if (section.id === "services") return renderServicesManager(provider, serviceState);
     if (section.id === "portfolio") return renderPortfolioManager(provider, portfolioState);
@@ -368,7 +415,7 @@
     return renderPlaceholder(section, provider);
   }
 
-  function renderDashboard({ currentUser, provider, activeSection, profileError, serviceState, portfolioState, scheduleError }) {
+  function renderDashboard({ currentUser, provider, activeSection, profileError, serviceState, portfolioState, scheduleError, bookingState }) {
     const section = SECTIONS.find((item) => item.id === activeSection) || SECTIONS[0];
     const providerName = provider?.name || currentUser?.email || "服务者";
     return `
@@ -387,7 +434,7 @@
             <h1>${section.title}</h1>
             <p>${section.description}</p>
           </header>
-          ${renderContent(provider, section.id, profileError, serviceState, portfolioState, scheduleError)}
+          ${renderContent(provider, section.id, profileError, serviceState, portfolioState, scheduleError, bookingState)}
         </section>
       </section>
     `;

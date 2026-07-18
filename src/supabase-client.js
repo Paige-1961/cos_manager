@@ -61,6 +61,39 @@
     }
   }
 
+  async function loadBookings(userId) {
+    if (!client || !userId) return [];
+    const { data, error } = await client.from("bookings").select("*").or(`customer_user_id.eq.${userId},provider_user_id.eq.${userId}`).order("updated_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function saveBooking(booking) {
+    if (!client) return { ok: false, error: "Supabase is not configured." };
+    const { error } = await client.from("bookings").insert({
+      id: booking.id,
+      customer_user_id: booking.customerUserId,
+      provider_user_id: booking.providerUserId,
+      provider_id: booking.providerId,
+      service_id: booking.serviceId,
+      saved_plan_id: booking.savedPlanId,
+      plan_title: booking.planTitle,
+      customer_label: booking.customerLabel,
+      preferred_date: booking.preferredDate,
+      note: booking.note,
+      status: booking.status,
+      created_at: booking.createdAt,
+      updated_at: booking.updatedAt,
+    });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  async function updateBookingStatus(providerUserId, bookingId, status) {
+    if (!client) return { ok: false, error: "Supabase is not configured." };
+    const { error } = await client.from("bookings").update({ status, updated_at: new Date().toISOString() }).eq("id", bookingId).eq("provider_user_id", providerUserId);
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
   async function hydrateUserData(user) {
     if (!client || !user?.id) return;
     try {
@@ -86,6 +119,9 @@
     saveProviderProfile,
     loadPublishedProviderProfiles,
     hydratePublishedProviders,
+    loadBookings,
+    saveBooking,
+    updateBookingStatus,
     hydrateUserData,
   };
 })();

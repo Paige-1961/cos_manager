@@ -5,6 +5,7 @@ const profileStore = window.profileStore;
 const profileDrawer = window.profileDrawer;
 const providerData = window.providerData;
 const planStore = window.planStore;
+const bookingStore = window.bookingStore;
 const providerDashboard = window.providerDashboard;
 const providerStore = window.providerStore;
 
@@ -35,6 +36,10 @@ let providerPortfolioEditingId = null;
 let providerPortfolioDraft = null;
 let providerPortfolioError = "";
 let providerScheduleError = "";
+let isBookingModalOpen = false;
+let bookingProviderId = null;
+let bookingError = "";
+let providerBookingError = "";
 let providerDetailReturnHash = sessionStorage.getItem("cospilot.providerReturnHash") || "providers";
 let lastRouteKey = "";
 
@@ -142,6 +147,78 @@ function renderLoginRequiredState(title = "请先登录") {
         <button class="primary-action interactive-surface" data-auth-open="login" type="button">登录</button>
       </article>
     </section>
+  `;
+}
+
+function bookingStatusLabel(status) {
+  return status === "accepted" ? "已接受" : status === "rejected" ? "已拒绝" : "待服务者确认";
+}
+
+function renderCustomerBookingsPage() {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return renderLoginRequiredState("查看我的预约前需要登录");
+  if (currentUser.role !== "customer") return `<section class="saved-plan-page"><article class="panel empty-saved-plan"><p class="eyebrow">Bookings</p><h2>客户预约中心</h2><p>当前账号是服务者，请前往服务者工作台处理收到的预约。</p><a class="primary-action interactive-surface" href="#provider-dashboard">进入服务者工作台</a></article></section>`;
+  const bookings = bookingStore.getBookingsByCustomer(currentUser.id);
+  return `
+    <section class="saved-plan-page booking-page">
+      <div class="section-heading slim-heading"><p class="eyebrow">Bookings</p><h1>我的预约</h1><p>查看预约日期和服务者处理状态。</p></div>
+      ${bookings.length ? `<div class="booking-list">${bookings.map((booking) => {
+        const provider = getProviderById(booking.providerId);
+        const service = getServiceById(booking.providerId, booking.serviceId);
+        return `<article class="booking-card panel interactive-surface">
+          <div class="booking-card-heading"><div><h3>${escapeHtml(provider?.name || "服务者数据已失效")}</h3><small>创建于 ${formatDateTime(booking.createdAt)}</small></div><span class="booking-status ${escapeHtml(booking.status)}">${bookingStatusLabel(booking.status)}</span></div>
+          <dl><div><dt>服务项目</dt><dd>${escapeHtml(service?.name || service?.title || "服务数据已失效")}</dd></div><div><dt>预约日期</dt><dd>${escapeHtml(booking.preferredDate)}</dd></div><div><dt>关联方案</dt><dd>${escapeHtml(booking.planTitle || "未关联")}</dd></div></dl>
+          ${booking.note ? `<p>备注：${escapeHtml(booking.note)}</p>` : ""}
+          ${provider ? `<a class="secondary-action interactive-surface" href="#provider/${encodeURIComponent(booking.providerId)}">查看服务者主页</a>` : ""}
+        </article>`;
+      }).join("")}</div>` : `<article class="panel empty-saved-plan"><h3>还没有预约</h3><p>从服务者详情页选择服务和档期，发起第一条预约。</p><a class="primary-action interactive-surface" href="#providers">浏览服务者</a></article>`}
+    </section>
+  `;
+}
+
+function closeBookingModal() {
+  isBookingModalOpen = false;
+  bookingProviderId = null;
+  bookingError = "";
+}
+
+function openBookingModal(provider) {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser || currentUser.role !== "customer") {
+    showActionFeedback("只有客户账号可以发起预约。");
+    return;
+  }
+  bookingProviderId = provider?.providerId || provider?.id || null;
+  bookingError = "";
+  isBookingModalOpen = Boolean(bookingProviderId);
+  render();
+}
+
+function renderBookingModal() {
+  if (!isBookingModalOpen) return "";
+  const currentUser = authStore.getCurrentUser();
+  const provider = getProviderById(bookingProviderId);
+  if (!currentUser || !provider) return "";
+  const services = provider.services || [];
+  const dates = (provider.availableDates || []).filter((date) => date >= todayIso());
+  const plans = planStore.getPlansByUser(currentUser.id);
+  return `
+    <div class="auth-backdrop" data-booking-close="true">
+      <section class="auth-modal booking-modal interactive-surface" role="dialog" aria-modal="true" aria-label="预约 ${escapeHtml(provider.name)}">
+        <button class="auth-close" data-booking-close="true" type="button">×</button>
+        <div class="auth-heading"><p class="eyebrow">Booking</p><h2>预约 ${escapeHtml(provider.name)}</h2><p>提交后等待服务者接受或拒绝。</p></div>
+        <form id="booking-form" class="auth-form">
+          <label><span>服务项目</span><select name="serviceId" required><option value="">选择服务</option>${services.map((service) => `<option value="${escapeHtml(service.id)}">${escapeHtml(service.name || service.title)} · ${formatCurrency(service.price)}</option>`).join("")}</select></label>
+          <label><span>预约日期</span><select name="preferredDate" required><option value="">选择可约日期</option>${dates.map((date) => `<option value="${escapeHtml(date)}">${escapeHtml(date)}</option>`).join("")}</select></label>
+          <label><span>关联已有方案（可选）</span><select name="savedPlanId"><option value="">不关联方案</option>${plans.map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.title)}</option>`).join("")}</select></label>
+          <label><span>备注</span><textarea name="note" rows="3" placeholder="补充角色、风格或沟通需求"></textarea></label>
+          ${!services.length ? '<p class="auth-error">该服务者还没有可预约服务。</p>' : ""}
+          ${!dates.length ? '<p class="auth-error">该服务者当前没有未来可约档期。</p>' : ""}
+          ${bookingError ? `<p class="auth-error">${escapeHtml(bookingError)}</p>` : ""}
+          <button class="primary-action interactive-surface" type="submit" ${!services.length || !dates.length ? "disabled" : ""}>提交预约</button>
+        </form>
+      </section>
+    </div>
   `;
 }
 
@@ -258,6 +335,7 @@ function renderPlanNotFoundState() {
 function getCurrentRoute() {
   const hash = window.location.hash.replace(/^#/, "");
   if (hash === "provider-dashboard") return { name: "providerDashboard" };
+  if (hash === "bookings") return { name: "bookings" };
   const providerMatch = hash.match(/^provider\/(.+)$/);
   if (providerMatch) return { name: "provider", providerId: decodeURIComponent(providerMatch[1]) };
   const planMatch = hash.match(/^plan\/(.+)$/);
@@ -286,7 +364,7 @@ function syncRouteState(route) {
   lastRouteKey = routeKey;
   if (route.name === "provider") activeProviderTab = "works";
   if (route.name === "providerDashboard") activeProviderDashboardSection = "overview";
-  if ((route.name === "plans" || route.name === "plan" || route.name === "providerDashboard") && !authStore.isAuthenticated()) {
+  if ((route.name === "plans" || route.name === "plan" || route.name === "bookings" || route.name === "providerDashboard") && !authStore.isAuthenticated()) {
     authMode = "login";
     authError = "";
     isAuthModalOpen = true;
@@ -1007,11 +1085,50 @@ function bindEvents() {
           return;
         }
         if (actionName === "book-provider" || actionName === "book-card") {
-          showActionFeedback(`已进入 ${provider?.name || "该服务者"} 的预约确认入口。`);
+          openBookingModal(provider);
         }
       });
     });
   });
+
+  document.querySelectorAll("[data-booking-close]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      if (event.target.dataset.bookingClose) {
+        closeBookingModal();
+        render();
+      }
+    });
+  });
+
+  const bookingForm = document.querySelector("#booking-form");
+  if (bookingForm) {
+    bookingForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const currentUser = authStore.getCurrentUser();
+      const provider = getProviderById(bookingProviderId);
+      const formData = new FormData(bookingForm);
+      const savedPlanId = String(formData.get("savedPlanId") || "");
+      const savedPlan = savedPlanId ? planStore.getPlanById(currentUser?.id, savedPlanId) : null;
+      const profile = currentUser?.role === "customer" ? getCustomerProfile(currentUser) : null;
+      const outcome = await bookingStore.createBooking(currentUser, provider, {
+        serviceId: String(formData.get("serviceId") || ""),
+        preferredDate: String(formData.get("preferredDate") || ""),
+        savedPlanId: savedPlan?.id || null,
+        planTitle: savedPlan?.title || "",
+        customerLabel: profile?.nickname || currentUser?.email || "客户",
+        note: String(formData.get("note") || ""),
+      });
+      if (!outcome.ok) {
+        bookingError = outcome.error;
+        render();
+        return;
+      }
+      closeBookingModal();
+      actionFeedback = "预约已提交，等待服务者确认。";
+      window.location.hash = "bookings";
+      render();
+    });
+  }
 
   document.querySelectorAll("[data-auth-open]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1058,6 +1175,14 @@ function bindEvents() {
         resetProfileUiState();
         render();
       }
+    });
+  });
+
+  document.querySelectorAll("[data-my-bookings]").forEach((button) => {
+    button.addEventListener("click", () => {
+      isProfileDrawerOpen = false;
+      resetProfileUiState();
+      window.location.hash = "bookings";
     });
   });
 
@@ -1108,6 +1233,16 @@ function bindEvents() {
         return;
       }
       activeProviderDashboardSection = nextSection;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-booking-status]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const currentUser = authStore.getCurrentUser();
+      const outcome = await bookingStore.updateBookingStatus(currentUser, button.dataset.bookingId, button.dataset.bookingStatus);
+      providerBookingError = outcome.ok ? "" : outcome.error;
+      if (outcome.ok) actionFeedback = outcome.booking.status === "accepted" ? "已接受预约。" : "已拒绝预约。";
       render();
     });
   });
@@ -1413,6 +1548,11 @@ function bindEvents() {
   });
 
   document.onkeydown = (event) => {
+    if (event.key === "Escape" && isBookingModalOpen) {
+      closeBookingModal();
+      render();
+      return;
+    }
     if (event.key === "Escape" && isProfileDrawerOpen) {
       isProfileDrawerOpen = false;
       resetProfileUiState();
@@ -1583,7 +1723,8 @@ function renderProviderDashboardPage() {
   if (!currentUser) return renderLoginRequiredState("进入服务者工作台前需要登录");
   if (currentUser.role !== "provider") return providerDashboard.renderForbidden();
   const provider = getProviderProfileForUser(currentUser);
-  return providerDashboard.renderDashboard({ currentUser, provider: providerProfileDraft || provider, activeSection: activeProviderDashboardSection, profileError: providerProfileError, serviceState: { editingId: providerServiceEditingId, draft: providerServiceDraft, error: providerServiceError }, portfolioState: { editingId: providerPortfolioEditingId, draft: providerPortfolioDraft, error: providerPortfolioError }, scheduleError: providerScheduleError });
+  const bookings = bookingStore.getBookingsByProvider(provider?.providerId || provider?.id, currentUser.id).map((booking) => ({ ...booking, serviceName: getServiceById(booking.providerId, booking.serviceId)?.name || getServiceById(booking.providerId, booking.serviceId)?.title || "服务项目已失效" }));
+  return providerDashboard.renderDashboard({ currentUser, provider: providerProfileDraft || provider, activeSection: activeProviderDashboardSection, profileError: providerProfileError, serviceState: { editingId: providerServiceEditingId, draft: providerServiceDraft, error: providerServiceError }, portfolioState: { editingId: providerPortfolioEditingId, draft: providerPortfolioDraft, error: providerPortfolioError }, scheduleError: providerScheduleError, bookingState: { bookings, error: providerBookingError } });
 }
 function renderMainContent(route) {
   if (route.name === "provider") {
@@ -1591,6 +1732,9 @@ function renderMainContent(route) {
   }
   if (route.name === "providerDashboard") {
     return renderProviderDashboardPage();
+  }
+  if (route.name === "bookings") {
+    return renderCustomerBookingsPage();
   }
   if (route.name === "plans") {
     return renderSavedPlansPage();
@@ -1624,6 +1768,7 @@ function render() {
       ${renderMainContent(route)}
     </main>
     ${renderAuthModal()}
+    ${renderBookingModal()}
     ${renderMyDrawer()}
     ${renderActionFeedback()}
   `;
@@ -1677,6 +1822,12 @@ render();
 
 
 
+async function hydrateBookingsForCurrentUser() {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return;
+  await bookingStore.hydrateForUser(currentUser.id);
+}
+
 async function refreshPublishedProviderData() {
   if (!window.cospilotSupabase?.enabled()) return;
   await window.cospilotSupabase.hydratePublishedProviders();
@@ -1690,8 +1841,8 @@ window.addEventListener("cospilot:auth-change", async (event) => {
   if (user) {
     await window.cospilotSupabase?.hydrateUserData(user);
   }
-  await refreshPublishedProviderData();
+  await Promise.all([refreshPublishedProviderData(), hydrateBookingsForCurrentUser()]);
   render();
 });
 
-refreshPublishedProviderData().then(render);
+Promise.all([refreshPublishedProviderData(), hydrateBookingsForCurrentUser()]).then(render);

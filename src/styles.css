@@ -2479,3 +2479,123 @@ button.plan-card {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Booking workflow */
+.booking-modal .auth-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.booking-modal textarea,
+.booking-modal select {
+  width: 100%;
+}
+
+.booking-page {
+  display: grid;
+  gap: 22px;
+}
+
+.booking-list {
+  display: grid;
+  gap: 16px;
+}
+
+.booking-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.booking-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.booking-card-heading h3,
+.booking-card-heading strong,
+.booking-card p {
+  margin: 0;
+}
+
+.booking-card-heading small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.booking-card dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.booking-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.booking-card dt {
+  color: var(--muted);
+}
+
+.booking-card dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 800;
+}
+
+.booking-status {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid #d6d0c8;
+  border-radius: 6px;
+  background: #f4f1ec;
+  color: #625a51;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.booking-status.accepted {
+  border-color: #9fc9b0;
+  background: #edf8f1;
+  color: #21633b;
+}
+
+.booking-status.rejected {
+  border-color: #e2aaaa;
+  background: #fff1f1;
+  color: #923636;
+}
+
+.booking-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.provider-bookings-manager {
+  display: grid;
+  gap: 18px;
+}
+
+@media (max-width: 700px) {
+  .booking-card-heading,
+  .booking-card dl div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .booking-card dd {
+    text-align: left;
+  }
+}

@@ -81,6 +81,7 @@
             <div><dt>密码</dt><dd><span class="password-mask">••••••••</span><button class="text-action" data-password-open="true" type="button">修改密码</button></dd></div>
           </dl>
           <div class="account-drawer-actions">
+            <button class="secondary-action interactive-surface" data-my-bookings="true" type="button">我的预约</button>
             <button class="secondary-action interactive-surface" data-my-plans="true" type="button">我的方案</button>
             <button class="secondary-action interactive-surface" data-profile-edit="true" type="button">编辑</button>
             <button class="primary-action interactive-surface" data-auth-logout="true" type="button">退出登录</button>
