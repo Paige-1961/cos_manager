@@ -772,7 +772,7 @@ function renderBriefs() {
 }
 
 function renderProviders() {
-  const visibleProviders = result.candidates.flatMap((group) => group.candidates.slice(0, 2));
+  const visibleProviders = providerData.getAllProviders();
   return `
     <section class="split-section">
       <div class="section-heading slim-heading">
