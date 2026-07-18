@@ -46,6 +46,7 @@ let lastRouteKey = "";
 let agentUnderstanding = null;
 let isAgentParsing = false;
 let hasGeneratedPlan = true;
+const CURRENT_PLAN_BOOKING_VALUE = "__current-plan__";
 
 const app = document.querySelector("#app");
 
@@ -77,6 +78,33 @@ function getSelectedDate(resolvedPlan) {
   return resolvedPlan.sharedDates?.[0] || requirement.preferredDate || requirement.dateEnd;
 }
 
+function createTimeline(resolvedPlan) {
+  const selectedDate = getSelectedDate(resolvedPlan);
+  return [
+    { time: "确认前", task: "确认服务者档期、报价和拍摄风格参考。" },
+    { time: "拍摄前 1-3 天", task: "发送角色参考、服装状态、妆造要求和棚景偏好。" },
+    { time: selectedDate, task: "按共同档期完成妆造、棚拍和现场确认。" },
+    { time: "拍摄后", task: "筛片、确认后期方向并跟进交付。" },
+  ];
+}
+
+function getCurrentPlanOutput() {
+  const resolvedPlan = getResolvedPlan();
+  return {
+    selectedDate: getSelectedDate(resolvedPlan),
+    timeline: createTimeline(resolvedPlan),
+    briefs: createBriefs(resolvedPlan),
+  };
+}
+
+function getCurrentBookingPlanContext(providerId) {
+  const plan = getPlan();
+  const resolvedPlan = getResolvedPlan();
+  const member = resolvedPlan?.resolvedMembers?.find((item) => (item.providerId || item.id) === providerId);
+  if (!plan || !member) return null;
+  return { plan, resolvedPlan, member, output: getCurrentPlanOutput() };
+}
+
 function getProviderById(id) {
   return providerData.getProviderById(id);
 }
@@ -101,7 +129,7 @@ function formatDateTime(value) {
 function getCurrentSavablePlan() {
   const plan = getPlan();
   const resolvedPlan = getResolvedPlan();
-  const finalOutput = result.finalPlan || {};
+  const currentOutput = getCurrentPlanOutput();
   return {
     ...plan,
     requirement: { ...requirement },
@@ -112,9 +140,9 @@ function getCurrentSavablePlan() {
     actions: resolvedPlan.actions || plan.actions || [],
     warnings: plan.warnings || [],
     adjustments: plan.adjustments || resolvedPlan.actions || [],
-    selectedDate: finalOutput.selectedDate || getSelectedDate(resolvedPlan),
-    timeline: finalOutput.timeline || [],
-    briefs: finalOutput.briefs || createBriefs(resolvedPlan),
+    selectedDate: currentOutput.selectedDate,
+    timeline: currentOutput.timeline,
+    briefs: currentOutput.briefs,
   };
 }
 
@@ -206,15 +234,19 @@ function renderBookingModal() {
   const services = provider.services || [];
   const dates = (provider.availableDates || []).filter((date) => date >= todayIso());
   const plans = planStore.getPlansByUser(currentUser.id);
+  const currentPlanContext = getCurrentBookingPlanContext(provider.providerId || provider.id);
+  const defaultServiceId = currentPlanContext?.member.serviceId || "";
+  const defaultDateCandidates = [...(currentPlanContext?.member.matchDates || []), currentPlanContext?.output.selectedDate].filter(Boolean);
+  const defaultDate = defaultDateCandidates.find((date) => dates.includes(date)) || "";
   return `
     <div class="auth-backdrop" data-booking-close="true">
       <section class="auth-modal booking-modal interactive-surface" role="dialog" aria-modal="true" aria-label="预约 ${escapeHtml(provider.name)}">
         <button class="auth-close" data-booking-close="true" type="button">×</button>
         <div class="auth-heading"><p class="eyebrow">Booking</p><h2>预约 ${escapeHtml(provider.name)}</h2><p>提交后等待服务者接受或拒绝。</p></div>
         <form id="booking-form" class="auth-form">
-          <label><span>服务项目</span><select name="serviceId" required><option value="">选择服务</option>${services.map((service) => `<option value="${escapeHtml(service.id)}">${escapeHtml(service.name || service.title)} · ${formatCurrency(service.price)}</option>`).join("")}</select></label>
-          <label><span>预约日期</span><select name="preferredDate" required><option value="">选择可约日期</option>${dates.map((date) => `<option value="${escapeHtml(date)}">${escapeHtml(date)}</option>`).join("")}</select></label>
-          <label><span>关联已有方案（可选）</span><select name="savedPlanId"><option value="">不关联方案</option>${plans.map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.title)}</option>`).join("")}</select></label>
+          <label><span>服务项目</span><select name="serviceId" required><option value="">选择服务</option>${services.map((service) => `<option value="${escapeHtml(service.id)}" ${service.id === defaultServiceId ? "selected" : ""}>${escapeHtml(service.name || service.title)} · ${formatCurrency(service.price)}</option>`).join("")}</select></label>
+          <label><span>预约日期</span><select name="preferredDate" required><option value="">选择可约日期</option>${dates.map((date) => `<option value="${escapeHtml(date)}" ${date === defaultDate ? "selected" : ""}>${escapeHtml(date)}</option>`).join("")}</select></label>
+          <label><span>关联方案（可选）</span><select name="savedPlanId"><option value="">不关联方案</option>${currentPlanContext ? `<option value="${CURRENT_PLAN_BOOKING_VALUE}" selected>当前方案：${escapeHtml(currentPlanContext.plan.name)}</option>` : ""}${plans.map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.title)}</option>`).join("")}</select></label>
           <label><span>备注</span><textarea name="note" rows="3" placeholder="补充角色、风格或沟通需求"></textarea></label>
           ${!services.length ? '<p class="auth-error">该服务者还没有可预约服务。</p>' : ""}
           ${!dates.length ? '<p class="auth-error">该服务者当前没有未来可约档期。</p>' : ""}
@@ -785,13 +817,13 @@ function renderParsedSummary() {
 function renderFinalPlan() {
   const plan = getPlan();
   const resolvedPlan = getResolvedPlan();
-  const selectedDate = getSelectedDate(resolvedPlan);
+  const currentOutput = getCurrentPlanOutput();
   return `
     <section class="result-layout">
       <article class="panel plan-hero interactive-surface">
         <div class="panel-kicker">当前方案</div>
         <h2>${plan.name}</h2>
-        <p class="lead">${resolvedPlan.sharedDates.length ? `建议日期：${selectedDate}` : "需要进一步协调共同档期"}</p>
+        <p class="lead">${resolvedPlan.sharedDates.length ? `建议日期：${currentOutput.selectedDate}` : "需要进一步协调共同档期"}</p>
         <div class="big-number">${formatCurrency(resolvedPlan.total)}</div>
         <div class="plan-actions"><button class="secondary-action interactive-surface" data-protected-action="save-plan" type="button">保存方案</button></div>
         <div class="member-list clickable-members">
@@ -817,10 +849,7 @@ function renderFinalPlan() {
         <div class="panel-kicker">Timeline</div>
         <h3>拍摄计划</h3>
         <div class="timeline">
-          <div><span>确认前</span><p>确认服务者档期、报价和拍摄风格参考。</p></div>
-          <div><span>拍摄前 1-3 天</span><p>发送角色参考、服装状态、妆造要求和棚景偏好。</p></div>
-          <div><span>${selectedDate}</span><p>按共同档期完成妆造、棚拍和现场确认。</p></div>
-          <div><span>拍摄后</span><p>筛片、确认后期方向并跟进交付。</p></div>
+          ${currentOutput.timeline.map((item) => `<div><span>${escapeHtml(item.time)}</span><p>${escapeHtml(item.task)}</p></div>`).join("")}
         </div>
       </article>
     </section>
@@ -1146,14 +1175,17 @@ function bindEvents() {
       const currentUser = authStore.getCurrentUser();
       const provider = getProviderById(bookingProviderId);
       const formData = new FormData(bookingForm);
-      const savedPlanId = String(formData.get("savedPlanId") || "");
+      const selectedBookingPlanId = String(formData.get("savedPlanId") || "");
+      const useCurrentPlan = selectedBookingPlanId === CURRENT_PLAN_BOOKING_VALUE;
+      const savedPlanId = useCurrentPlan ? "" : selectedBookingPlanId;
       const savedPlan = savedPlanId ? planStore.getPlanById(currentUser?.id, savedPlanId) : null;
+      const currentPlan = useCurrentPlan ? getPlan() : null;
       const profile = currentUser?.role === "customer" ? getCustomerProfile(currentUser) : null;
       const outcome = await bookingStore.createBooking(currentUser, provider, {
         serviceId: String(formData.get("serviceId") || ""),
         preferredDate: String(formData.get("preferredDate") || ""),
         savedPlanId: savedPlan?.id || null,
-        planTitle: savedPlan?.title || "",
+        planTitle: currentPlan?.name || savedPlan?.title || "",
         customerLabel: profile?.nickname || currentUser?.email || "客户",
         note: String(formData.get("note") || ""),
       });

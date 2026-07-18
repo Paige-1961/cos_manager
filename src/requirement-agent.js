@@ -17,6 +17,7 @@
     if (!match || /\d{1,2}\s*月\s*\d{1,2}\s*日?/.test(input)) return null;
     const now = new Date();
     const month = Number(match[2]);
+    if (month < 1 || month > 12) return null;
     const year = Number(match[1]) || (month < now.getMonth() + 1 ? now.getFullYear() + 1 : now.getFullYear());
     const endDay = new Date(year, month, 0).getDate();
     return {
@@ -40,8 +41,8 @@
     const character = explicit.character || (isLlm ? String(raw.character || "").trim() : fallbackCharacter);
     const city = String((isLlm ? raw.city : "") || (cityMentioned ? fallback.city : "")).trim();
     const district = raw.district ? String(raw.district).trim() : null;
-    const start = String(rawRange.start || monthRange?.start || "").trim();
-    const end = String(rawRange.end || monthRange?.end || start).trim();
+    const start = String(monthRange?.start || rawRange.start || "").trim();
+    const end = String(monthRange?.end || rawRange.end || start).trim();
     const fallbackBudgetMatch = input.match(/(?:预算|控制在|不超过|大概|只有)\s*[:：]?\s*(\d{2,5})(?:\s*(?:元|块|rmb|¥))?/i);
     const rawBudget = isLlm ? raw.budget : (fallbackBudgetMatch ? Number(fallbackBudgetMatch[1]) : null);
     const budgetValue = rawBudget === null || rawBudget === undefined || rawBudget === "" ? null : Number(rawBudget);
@@ -127,4 +128,3 @@
 
   window.requirementAgent = { understand, normalizeRequirement };
 })();
-
