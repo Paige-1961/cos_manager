@@ -8,6 +8,7 @@
     retoucher: "后期",
   };
   const originalProviderData = window.providerData;
+  let cloudPublishedProfiles = [];
 
   function readProfiles() {
     try {
@@ -181,6 +182,8 @@
   function getProviderById(providerId) {
     const stored = getStoredProfileByProviderId(providerId);
     if (stored?.isPublished) return normalizeProvider(stored);
+    const cloud = cloudPublishedProfiles.find((profile) => profile.providerId === providerId || profile.id === providerId);
+    if (cloud) return normalizeProvider(cloud);
     return originalProviderData.getProviderById(providerId);
   }
 
@@ -233,8 +236,23 @@
     return updateProviderProfile(userId, { availableDates: normalizeDates(availableDates) });
   }
 
+  function replacePublishedProfiles(profiles) {
+    cloudPublishedProfiles = (Array.isArray(profiles) ? profiles : []).filter((profile) => profile?.isPublished === true);
+    window.serviceProviders = getAllProviders();
+    return cloudPublishedProfiles.map(normalizeProvider);
+  }
+
   function getPublishedEditableProviders() {
-    return readProfiles().filter((profile) => profile.isPublished).map(normalizeProvider);
+    const providersById = new Map();
+    cloudPublishedProfiles.forEach((profile) => {
+      const provider = normalizeProvider(profile);
+      providersById.set(provider.providerId, provider);
+    });
+    readProfiles().filter((profile) => profile.isPublished).forEach((profile) => {
+      const provider = normalizeProvider(profile);
+      providersById.set(provider.providerId, provider);
+    });
+    return [...providersById.values()];
   }
 
   function getAllProviders() {
@@ -258,6 +276,7 @@
     getProviderById,
     createDefaultProvider,
     replaceProfile,
+    replacePublishedProfiles,
     updateProviderProfile,
     updateProviderServices,
     updateProviderPortfolio,

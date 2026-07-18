@@ -1677,10 +1677,21 @@ render();
 
 
 
+async function refreshPublishedProviderData() {
+  if (!window.cospilotSupabase?.enabled()) return;
+  await window.cospilotSupabase.hydratePublishedProviders();
+  result = runCosPilotPipelineRef(naturalInput);
+  requirement = result.requirement;
+  selectedPlanIndex = Math.min(selectedPlanIndex, Math.max(result.plans.length - 1, 0));
+}
+
 window.addEventListener("cospilot:auth-change", async (event) => {
   const user = event.detail?.user;
   if (user) {
     await window.cospilotSupabase?.hydrateUserData(user);
   }
+  await refreshPublishedProviderData();
   render();
 });
+
+refreshPublishedProviderData().then(render);

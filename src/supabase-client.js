@@ -42,6 +42,25 @@
     if (error) throw error;
   }
 
+  async function loadPublishedProviderProfiles() {
+    if (!client) return [];
+    const { data, error } = await client.from("provider_profiles").select("profile");
+    if (error) throw error;
+    return (data || []).map((row) => row.profile).filter((profile) => profile && profile.isPublished === true);
+  }
+
+  async function hydratePublishedProviders() {
+    if (!client) return [];
+    try {
+      const profiles = await loadPublishedProviderProfiles();
+      window.providerStore?.replacePublishedProfiles(profiles);
+      return profiles;
+    } catch (error) {
+      console.warn("Published provider hydration failed; using mock and local providers.", error);
+      return [];
+    }
+  }
+
   async function hydrateUserData(user) {
     if (!client || !user?.id) return;
     try {
@@ -65,6 +84,8 @@
     saveCustomerProfile,
     loadProviderProfile,
     saveProviderProfile,
+    loadPublishedProviderProfiles,
+    hydratePublishedProviders,
     hydrateUserData,
   };
 })();
