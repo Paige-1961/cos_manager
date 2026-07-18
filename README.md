@@ -39,10 +39,9 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 
 ## 当前版本限制
 
-- 数据仍为 mock data 与 localStorage，本地浏览器清理缓存后数据会丢失。
-- 账户、基础资料和 Provider 发布数据已支持 Supabase；部分原型业务仍保留 localStorage fallback。
+- 账户、Customer Profile、Provider 主页/服务/作品/档期与预约闭环已接入 Supabase；未配置或无法访问 Supabase 时，部分原型流程会回退到 mock data / localStorage。
+- 保存方案等仍使用 localStorage 的原型数据只保存在当前浏览器，清理站点数据后会丢失，且不能跨设备同步。
 - 未实现真实预约订单、支付、消息系统和收藏列表。
-- Provider 数据、方案数据、账户数据都保存在浏览器本地，不能跨设备同步。
 - LLM 不直接推荐 Provider；所有方案仍由本地确定性 Recommendation Engine 生成并校验。Edge Function 不可用时自动使用本地 fallback。
 - 区划选择目前是原型用子集，后续可替换为完整中国区划 JSON。
 - 图片使用 FileReader 转 data URL 存入 localStorage，适合原型验证，不适合作为正式图片存储方案。
