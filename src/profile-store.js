@@ -24,6 +24,22 @@ function getProfile(userId) {
   return readCustomerProfiles().find((profile) => profile.userId === userId) || null;
 }
 
+function syncProfileToCloud(profile) {
+  if (window.cospilotSupabase?.enabled()) {
+    window.cospilotSupabase.saveCustomerProfile(profile).catch((error) => console.warn("Customer profile cloud sync failed", error));
+  }
+}
+
+function replaceProfile(profile) {
+  if (!profile?.userId) return null;
+  const profiles = readCustomerProfiles();
+  const index = profiles.findIndex((item) => item.userId === profile.userId);
+  if (index >= 0) profiles[index] = { ...profiles[index], ...profile };
+  else profiles.push(profile);
+  saveCustomerProfiles(profiles);
+  return getProfile(profile.userId);
+}
+
 function createDefaultProfile(user) {
   if (!user?.id) return null;
   const existing = getProfile(user.id);
@@ -42,6 +58,7 @@ function createDefaultProfile(user) {
   };
 
   saveCustomerProfiles([...readCustomerProfiles(), profile]);
+  syncProfileToCloud(profile);
   return profile;
 }
 
@@ -59,6 +76,7 @@ function updateProfile(userId, updates) {
 
   profiles[index] = updated;
   saveCustomerProfiles(profiles);
+  syncProfileToCloud(updated);
   return updated;
 }
 
@@ -80,5 +98,6 @@ window.profileStore = {
   getProfile,
   createDefaultProfile,
   updateProfile,
+  replaceProfile,
   getPublicLocation,
 };

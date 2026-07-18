@@ -18,9 +18,16 @@
     }
   }
 
+  function syncProviderToCloud(profile) {
+    if (window.cospilotSupabase?.enabled() && profile?.userId) {
+      window.cospilotSupabase.saveProviderProfile(profile).catch((error) => console.warn("Provider profile cloud sync failed", error));
+    }
+  }
+
   function writeProfiles(profiles) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      profiles.forEach(syncProviderToCloud);
       return { ok: true };
     } catch (error) {
       return { ok: false, error: "本地存储空间不足，请更换更小的图片后再保存。" };
@@ -156,6 +163,16 @@
     return normalizeProvider(profile);
   }
 
+  function replaceProfile(profile) {
+    if (!profile?.userId) return null;
+    const profiles = readProfiles();
+    const index = profiles.findIndex((item) => item.userId === profile.userId);
+    if (index >= 0) profiles[index] = { ...profiles[index], ...profile };
+    else profiles.push(profile);
+    const outcome = writeProfiles(profiles);
+    return outcome.ok ? normalizeProvider(index >= 0 ? profiles[index] : profile) : null;
+  }
+
   function getProviderByUserId(userId) {
     const stored = getStoredProfileByUserId(userId);
     return stored ? normalizeProvider(stored) : null;
@@ -240,6 +257,7 @@
     getProviderByUserId,
     getProviderById,
     createDefaultProvider,
+    replaceProfile,
     updateProviderProfile,
     updateProviderServices,
     updateProviderPortfolio,

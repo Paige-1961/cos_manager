@@ -1437,7 +1437,7 @@ function bindEvents() {
 
   const passwordForm = document.querySelector("#password-form");
   if (passwordForm) {
-    passwordForm.addEventListener("submit", (event) => {
+    passwordForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(passwordForm);
       const currentPassword = formData.get("currentPassword");
@@ -1448,7 +1448,7 @@ function bindEvents() {
         render();
         return;
       }
-      const outcome = authStore.changePassword({ currentPassword, newPassword });
+      const outcome = await authStore.changePassword({ currentPassword, newPassword });
       if (!outcome.ok) {
         passwordError = outcome.error;
         render();
@@ -1529,7 +1529,7 @@ function bindEvents() {
   }
   const authForm = document.querySelector("#auth-form");
   if (authForm) {
-    authForm.addEventListener("submit", (event) => {
+    authForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(authForm);
       const email = formData.get("email");
@@ -1544,9 +1544,9 @@ function bindEvents() {
           render();
           return;
         }
-        outcome = authStore.register({ email, password, role });
+        outcome = await authStore.register({ email, password, role });
       } else {
-        outcome = authStore.login({ email, password });
+        outcome = await authStore.login({ email, password });
       }
 
       if (!outcome.ok) {
@@ -1676,3 +1676,11 @@ render();
 
 
 
+
+window.addEventListener("cospilot:auth-change", async (event) => {
+  const user = event.detail?.user;
+  if (user) {
+    await window.cospilotSupabase?.hydrateUserData(user);
+  }
+  render();
+});
