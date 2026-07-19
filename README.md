@@ -48,12 +48,54 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 
 ## LLM 配置
 
-需求理解通过 Supabase Edge Function `parse-requirement` 调用 OpenAI Responses API。浏览器中只保留函数名和超时时间，不保存 OpenAI API key。
+需求理解通过 Supabase Edge Function `parse-requirement` 调用可配置的 LLM Provider。浏览器只保留 Function 名称和超时时间，不保存供应商 API Key。
 
-1. 在 Supabase 项目中设置服务端 Secret：`OPENAI_API_KEY`。
-2. 可选设置 `OPENAI_MODEL`；未设置时使用 Edge Function 中的默认模型。
-3. 部署函数：`supabase functions deploy parse-requirement`。
-4. 保持 `src/supabase-config.js` 中的 Supabase URL 与 anon key 配置有效。
-5. API 或 Edge Function 不可用时，页面会自动回退到本地解析，并明确标记“本地 fallback”。
+Edge Function 支持以下环境变量：
 
-`OPENAI_API_KEY` 不应写入 `src/llm-config.js`、`src/supabase-config.js` 或任何会发送到浏览器的文件。
+- `LLM_PROVIDER`：供应商标识，默认 `openai`。
+- `LLM_API_KEY`：供应商 API Key。
+- `LLM_MODEL`：模型名称。
+- `LLM_BASE_URL`：OpenAI-compatible API 的基础地址，不包含末尾的 `responses` 或 `chat/completions`。
+- `LLM_API_STYLE`：`responses` 或 `chat-completions`。
+- `LLM_JSON_MODE`：Chat Completions 模式下可选 `json-schema`、`json-object` 或 `prompt`。
+- `LLM_ENDPOINT`：可选。供应商路径不标准时，用完整请求地址覆盖自动拼接结果。
+
+默认配置继续兼容原有 `OPENAI_API_KEY` 和 `OPENAI_MODEL`。推荐新部署统一使用 `LLM_*` 变量。
+
+### OpenAI Responses API
+
+```text
+LLM_PROVIDER=openai
+LLM_API_STYLE=responses
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=<可用模型>
+LLM_API_KEY=<仅保存为 Supabase Secret>
+```
+
+### OpenAI-compatible Chat Completions
+
+DeepSeek、Qwen 或其他兼容服务使用供应商控制台给出的 Base URL 和模型名：
+
+```text
+LLM_PROVIDER=<deepseek|qwen|其他标识>
+LLM_API_STYLE=chat-completions
+LLM_BASE_URL=<供应商 OpenAI-compatible Base URL>
+LLM_MODEL=<供应商模型名>
+LLM_API_KEY=<仅保存为 Supabase Secret>
+LLM_JSON_MODE=json-schema
+```
+
+如果供应商不支持严格 JSON Schema，依次尝试：
+
+1. `LLM_JSON_MODE=json-object`
+2. `LLM_JSON_MODE=prompt`
+
+无论使用哪种模式，Edge Function 都会在服务端解析并校验 `ProjectRequirement`。格式不合格或 API 不可用时，前端自动回退到本地解析，不会让 LLM 直接生成 Provider 推荐。
+
+配置完成后重新部署：
+
+```powershell
+supabase functions deploy parse-requirement
+```
+
+保持 `src/supabase-config.js` 中的 Supabase URL 与 anon key 有效。任何供应商 API Key 都不应写入前端文件或提交到 Git。
