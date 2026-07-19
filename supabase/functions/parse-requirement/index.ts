@@ -188,14 +188,25 @@ Deno.serve(async (request) => {
     const normalizedInput = String(input || "").trim();
     if (!normalizedInput) throw new HttpError(400, "missing_input", "Input is required.");
 
-    const response = await fetch(config.endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(buildRequestBody(config, normalizedInput, currentDate)),
-    });
-    const payload = await readProviderPayload(response);
+    async function sendToProvider(activeConfig) {
+      const response = await fetch(activeConfig.endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${activeConfig.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(buildRequestBody(activeConfig, normalizedInput, currentDate)),
+      });
+      return { response, payload: await readProviderPayload(response) };
+    }
+
+    let { response, payload } = await sendToProvider(config);
+    let providerMessage = payload?.error?.message || payload?.message || "";
+    const rejectsResponseFormat = /response[_ -]?format|json.?schema|structured output/i.test(providerMessage)
+      && /unavailable|unsupported|not support|invalid|unknown/i.test(providerMessage);
+    if (!response.ok && config.apiStyle === "chat-completions" && config.jsonMode !== "prompt" && rejectsResponseFormat) {
+      console.warn("Provider rejected structured response_format; retrying with prompt-only JSON.");
+      ({ response, payload } = await sendToProvider({ ...config, jsonMode: "prompt" }));
+      providerMessage = payload?.error?.message || payload?.message || "";
+    }
     if (!response.ok) {
-      const providerMessage = payload?.error?.message || payload?.message;
       throw new HttpError(502, "llm_request_failed", providerMessage || `LLM request failed with status ${response.status}.`);
     }
 
