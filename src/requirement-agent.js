@@ -8,7 +8,10 @@
 
   function explicitWorkAndCharacter(input) {
     const sourceWork = input.match(/《([^》]+)》/)?.[1]?.trim() || "";
-    const character = input.match(/《[^》]+》\s*(?:中|里)?\s*(?:的)?\s*([\u4e00-\u9fa5A-Za-z0-9·:_-]{1,20})(?=\s|[，。,.！!?]|$)/)?.[1]?.trim() || "";
+    const characterSegment = input.match(/《[^》]+》\s*(?:中|里)?\s*(?:的)?\s*([^，。,.！!?\s]{1,30})/)?.[1]?.trim() || "";
+    const character = characterSegment
+      .split(/(?:的)?(?:角色扮演(?:写真)?|cosplay|cos|写真|正片|拍摄)/i)[0]
+      .trim();
     return { sourceWork, character };
   }
 
