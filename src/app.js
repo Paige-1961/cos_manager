@@ -19,6 +19,7 @@ let isAuthModalOpen = false;
 let isProfileDrawerOpen = false;
 let authMode = "login";
 let authError = "";
+let isAuthSubmitting = false;
 let isProfileEditing = false;
 let profileDraft = null;
 let profileError = "";
@@ -739,8 +740,8 @@ function renderAuthModal() {
                 </fieldset>
               `
           }
-          ${authError ? `<p class="auth-error">${authError}</p>` : ""}
-          <button class="primary-action interactive-surface" type="submit">${isLogin ? "登录" : "注册并登录"}</button>
+          ${authError ? `<p class="auth-error">${escapeHtml(authError)}</p>` : ""}
+          <button class="primary-action interactive-surface" type="submit" ${isAuthSubmitting ? "disabled" : ""}>${isAuthSubmitting ? (isLogin ? "登录中..." : "注册中...") : (isLogin ? "登录" : "注册并登录")}</button>
         </form>
         <button class="auth-switch" data-auth-mode="${isLogin ? "register" : "login"}" type="button">
           ${isLogin ? "还没有账户？前往注册" : "已有账户？前往登录"}
@@ -1037,7 +1038,8 @@ function portfolioMeta(provider, item, index) {
     work: item.sourceWork || tags[1] || provider.portfolio || provider.name,
     location: item.location || `${provider.city}${provider.district}` || "未设置",
     style: tags.join(" / ") || provider.styles.slice(0, 2).join(" / "),
-    stats: `${Number(item.likes ?? 24 + index * 11)} likes · ${Number(item.comments ?? 6 + index * 3)} comments`,
+    likes: Number(item.likes ?? 24 + index * 11),
+    comments: Number(item.comments ?? 6 + index * 3),
   };
 }
 
@@ -1866,6 +1868,7 @@ function bindEvents() {
   if (authForm) {
     authForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (isAuthSubmitting) return;
       const formData = new FormData(authForm);
       const email = formData.get("email");
       const password = formData.get("password");
@@ -1879,9 +1882,20 @@ function bindEvents() {
           render();
           return;
         }
-        outcome = await authStore.register({ email, password, role });
-      } else {
-        outcome = await authStore.login({ email, password });
+      }
+
+      isAuthSubmitting = true;
+      authError = "";
+      render();
+      try {
+        outcome = authMode === "register"
+          ? await authStore.register({ email, password, role: formData.get("role") })
+          : await authStore.login({ email, password });
+      } catch (error) {
+        console.error("Auth request failed", error);
+        outcome = { ok: false, error: "网络请求失败，请检查连接后重试。" };
+      } finally {
+        isAuthSubmitting = false;
       }
 
       if (!outcome.ok) {

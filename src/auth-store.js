@@ -35,6 +35,30 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
+function isEmailRateLimitError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return error?.status === 429
+    || code === "over_email_send_rate_limit"
+    || code === "email_rate_limit_exceeded"
+    || message.includes("email rate limit")
+    || message.includes("rate limit exceeded")
+    || message.includes("too many requests");
+}
+
+function registrationErrorMessage(error) {
+  if (isEmailRateLimitError(error)) {
+    return "验证邮件发送过于频繁，请稍后再试。展示环境建议使用已注册账号登录，或为 Supabase 配置自定义 SMTP。";
+  }
+  if (error?.code === "user_already_exists" || /already registered|already exists/i.test(error?.message || "")) {
+    return "该邮箱已注册，请直接登录。";
+  }
+  if (/invalid.*email|email.*invalid/i.test(error?.message || "")) {
+    return "请输入有效邮箱。";
+  }
+  return "注册暂时失败，请稍后再试。";
+}
+
 function createUserId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `user_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -93,10 +117,10 @@ async function registerCloud({ email, password, role }) {
   const cleanEmail = normalizeEmail(email);
   const cleanRole = role === "provider" ? "provider" : role === "customer" ? "customer" : "";
   if (!cleanEmail || !password || !cleanRole) return { ok: false, error: "\u8bf7\u586b\u5199\u90ae\u7bb1\u3001\u5bc6\u7801\u5e76\u9009\u62e9\u89d2\u8272\u3002" };
-  if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) return { ok: false, error: "????????" };
-  if (password.length < 6) return { ok: false, error: "???? 6 ??" };
+  if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) return { ok: false, error: "请输入有效邮箱。" };
+  if (password.length < 6) return { ok: false, error: "密码至少 6 位。" };
   const { data, error } = await window.cospilotSupabase.client.auth.signUp({ email: cleanEmail, password, options: { data: { role: cleanRole } } });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: registrationErrorMessage(error) };
   if (!data.session || !data.user) return { ok: false, error: "\u6ce8\u518c\u6210\u529f\uff0c\u8bf7\u5148\u5728\u90ae\u7bb1\u4e2d\u5b8c\u6210\u9a8c\u8bc1\u540e\u518d\u767b\u5f55\u3002" };
   const user = cloudUserFromSupabase(data.user);
   setCloudCurrentUser(user);

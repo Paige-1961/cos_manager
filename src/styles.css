@@ -148,6 +148,11 @@ main {
   background: var(--ink);
 }
 
+.primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .secondary-action {
   color: var(--ink);
   background: transparent;
@@ -1712,6 +1717,7 @@ button.plan-card {
 .portfolio-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -1890,15 +1896,22 @@ button.plan-card {
 }
 
 .portfolio-card {
+  grid-template-rows: auto auto;
+  align-self: start;
+  align-content: start !important;
+  min-height: 0 !important;
   overflow: hidden;
+  gap: 0 !important;
   padding: 0 !important;
   background: #fff !important;
 }
 
 .portfolio-art {
   display: grid;
+  width: 100%;
   aspect-ratio: 4 / 3;
   place-items: center;
+  overflow: hidden;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, #fff), rgba(255, 255, 255, 0.8)),
     repeating-linear-gradient(45deg, rgba(32, 33, 36, 0.05) 0 8px, rgba(32, 33, 36, 0.02) 8px 16px);
