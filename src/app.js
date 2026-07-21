@@ -206,6 +206,25 @@ function bookingStatusLabel(status) {
   return status === "accepted" ? "已接受" : status === "rejected" ? "已拒绝" : "待服务者确认";
 }
 
+function renderBookingProgress(booking) {
+  const rejected = booking.status === "rejected";
+  const accepted = booking.status === "accepted";
+  const steps = [
+    { label: "已提交", detail: formatDateTime(booking.createdAt), state: "complete" },
+    {
+      label: rejected ? "未能接受" : accepted ? "服务者已接受" : "等待服务者确认",
+      detail: rejected ? "可以返回服务者列表选择其他伙伴" : accepted ? "档期已经确认" : "状态更新后会在这里显示",
+      state: rejected ? "rejected" : accepted ? "complete" : "current",
+    },
+    {
+      label: "按预约日期开始协作",
+      detail: booking.preferredDate || "日期待确认",
+      state: accepted ? "current" : "upcoming",
+    },
+  ];
+  return `<div class="booking-progress" aria-label="预约进度">${steps.map((step) => `<div class="booking-progress-step ${step.state}"><span></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.detail)}</small></div></div>`).join("")}</div>`;
+}
+
 function renderCustomerBookingsPage() {
   const currentUser = authStore.getCurrentUser();
   if (!currentUser) return renderLoginRequiredState("查看我的预约前需要登录");
@@ -220,6 +239,7 @@ function renderCustomerBookingsPage() {
         return `<article class="booking-card panel interactive-surface">
           <div class="booking-card-heading"><div><h3>${escapeHtml(provider?.name || "服务者数据已失效")}</h3><small>创建于 ${formatDateTime(booking.createdAt)}</small></div><span class="booking-status ${escapeHtml(booking.status)}">${bookingStatusLabel(booking.status)}</span></div>
           <dl><div><dt>服务项目</dt><dd>${escapeHtml(service?.name || service?.title || "服务数据已失效")}</dd></div><div><dt>预约日期</dt><dd>${escapeHtml(booking.preferredDate)}</dd></div><div><dt>关联方案</dt><dd>${escapeHtml(booking.planTitle || "未关联")}</dd></div></dl>
+          ${renderBookingProgress(booking)}
           ${booking.note ? `<p>备注：${escapeHtml(booking.note)}</p>` : ""}
           ${provider ? `<a class="secondary-action interactive-surface" href="#provider/${encodeURIComponent(booking.providerId)}">查看服务者主页</a>` : ""}
         </article>`;
@@ -388,16 +408,119 @@ function renderPlanNotFoundState() {
     </section>
   `;
 }
+
+function getFeaturedWorks(limit = 8) {
+  return providerData.getAllProviders().flatMap((provider) => {
+    const items = provider.portfolioItems?.length
+      ? provider.portfolioItems
+      : [{ id: `${provider.providerId || provider.id}-featured`, title: provider.portfolio || `${provider.name} 精选作品`, styles: provider.styles || [], images: [] }];
+    return items.map((item) => ({ ...item, provider }));
+  }).slice(0, limit);
+}
+
+function renderWorkCard(item) {
+  const providerId = item.provider.providerId || item.provider.id;
+  const tags = item.styles || item.tags || item.provider.styles || [];
+  const image = item.images?.[0];
+  return `
+    <a class="inspiration-card interactive-surface" href="#provider/${encodeURIComponent(providerId)}">
+      <div class="inspiration-art" style="--accent:${escapeHtml(item.provider.accent || "#d9a6ae")}">
+        ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.title || "Cosplay 作品")}" />` : `<span>${escapeHtml(String(item.title || "作品").slice(0, 1))}</span>`}
+      </div>
+      <div class="inspiration-card-body">
+        <small>${escapeHtml(tags.slice(0, 2).join(" / ") || item.provider.roleLabel || "Cosplay")}</small>
+        <h3>${escapeHtml(item.title || "精选创作")}</h3>
+        <p>${escapeHtml(item.character || item.sourceWork || item.provider.name)}</p>
+      </div>
+    </a>`;
+}
+
+function renderLandingPage() {
+  const providers = providerData.getAllProviders();
+  const works = getFeaturedWorks(4);
+  const categories = [
+    ["makeup", "妆造师"], ["wig", "假发造型"], ["photographer", "摄影师"], ["studio", "摄影棚"], ["retoucher", "后期编辑"],
+  ];
+  return `
+    <section class="landing-page">
+      <section class="landing-hero">
+        <div class="landing-hero-copy">
+          <p class="eyebrow">From Imagination to Creation</p>
+          <h1>Plan Your Perfect<br />Cosplay Photoshoot.</h1>
+          <p>用一句话描述你的 Cosplay 灵感。CosPilot 会理解需求、组合创作伙伴，并整理成一份可以开始执行的拍摄方案。</p>
+          <div class="landing-actions"><a class="primary-action interactive-surface" href="#planner">开始规划</a><a class="secondary-action interactive-surface" href="#inspiration">浏览灵感</a></div>
+          <small>不需要先准备完整清单，信息不完整也可以开始。</small>
+        </div>
+        <div class="landing-editorial-card panel">
+          <p class="eyebrow">Try a prompt</p>
+          <blockquote>“我想在北京拍《崩坏：星穹铁道》银狼，7 月中旬，预算 800 元，偏电影感。”</blockquote>
+          <div class="landing-card-result"><span>AI 将帮你整理</span><strong>角色 · 城市 · 预算 · 档期 · 创作伙伴</strong></div>
+          <a href="#planner">用这个思路开始 →</a>
+        </div>
+      </section>
+      <section class="landing-section">
+        <div class="section-heading slim-heading"><p class="eyebrow">How It Works</p><h2>从一个想法，到可以执行的计划</h2></div>
+        <div class="how-it-works">
+          <article><span>01</span><h3>描述你的想法</h3><p>角色、城市、日期和预算，知道多少就写多少。</p></article>
+          <article><span>02</span><h3>AI 理解需求</h3><p>自动整理关键信息，并提醒仍需确认的内容。</p></article>
+          <article><span>03</span><h3>发现创作伙伴</h3><p>根据地点、风格、档期和预算进行可解释匹配。</p></article>
+          <article><span>04</span><h3>开始创作旅程</h3><p>保存方案、发送预约，并在一个地方跟进进度。</p></article>
+        </div>
+      </section>
+      <section class="landing-section">
+        <div class="section-heading-row"><div class="section-heading slim-heading"><p class="eyebrow">Creative Partners</p><h2>找到与你合拍的创作者</h2></div><a href="#providers">查看全部 ${providers.length} 位伙伴 →</a></div>
+        <div class="partner-category-grid">${categories.map(([id, label]) => `<a href="#providers"><span>${label}</span><strong>${providers.filter((provider) => provider.category === id).length}</strong><small>位已发布伙伴</small></a>`).join("")}</div>
+      </section>
+      <section class="landing-section landing-featured">
+        <div class="section-heading-row"><div class="section-heading slim-heading"><p class="eyebrow">Featured Creations</p><h2>来自社区的创作灵感</h2></div><a href="#inspiration">进入灵感页 →</a></div>
+        <div class="inspiration-grid">${works.map(renderWorkCard).join("")}</div>
+      </section>
+    </section>`;
+}
+
+function renderInspirationPage() {
+  const works = getFeaturedWorks(12);
+  const tags = uniqueSorted(works.flatMap((item) => item.styles || item.tags || item.provider.styles || [])).slice(0, 8);
+  return `
+    <section class="inspiration-page">
+      <header class="inspiration-hero"><p class="eyebrow">Inspiration</p><h1>为下一次 Cosplay<br />找到视觉方向</h1><p>从角色演绎、摄影风格和创作者作品中收集灵感，再带着更清晰的想法开始规划。</p><div class="inspiration-tags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div></header>
+      <section class="landing-section"><div class="section-heading-row"><div class="section-heading slim-heading"><p class="eyebrow">Mood Board</p><h2>精选作品</h2></div><a href="#planner">带着灵感开始规划 →</a></div><div class="inspiration-grid inspiration-grid-large">${works.map(renderWorkCard).join("")}</div></section>
+    </section>`;
+}
+
+function renderCustomerDashboardPage() {
+  const currentUser = authStore.getCurrentUser();
+  if (!currentUser) return renderLoginRequiredState("进入我的空间前需要登录");
+  if (currentUser.role !== "customer") return `<section class="saved-plan-page"><article class="panel empty-saved-plan"><p class="eyebrow">Dashboard</p><h2>服务者工作台</h2><p>当前是服务者账号，请进入服务者专属工作台。</p><a class="primary-action interactive-surface" href="#provider-dashboard">进入工作台</a></article></section>`;
+  const profile = getCustomerProfile(currentUser);
+  const plans = planStore.getPlansByUser(currentUser.id);
+  const bookings = bookingStore.getBookingsByCustomer(currentUser.id);
+  const nextBooking = bookings.find((booking) => booking.status !== "rejected") || bookings[0];
+  return `
+    <section class="customer-dashboard-page">
+      <header class="customer-dashboard-hero"><div><p class="eyebrow">My CosPilot</p><h1>欢迎回来，${escapeHtml(profile?.nickname || currentUser.email.split("@")[0])}</h1><p>继续推进你的计划，或从一个新想法开始。</p></div><a class="primary-action interactive-surface" href="#planner">创建新方案</a></header>
+      <div class="customer-dashboard-metrics"><a href="#plans"><span>我的方案</span><strong>${plans.length}</strong><small>查看保存的计划</small></a><a href="#bookings"><span>我的预约</span><strong>${bookings.length}</strong><small>跟进服务者状态</small></a><a href="#inspiration"><span>创作灵感</span><strong>${getFeaturedWorks(99).length}</strong><small>浏览社区作品</small></a></div>
+      <div class="customer-dashboard-grid">
+        <section class="panel"><div class="detail-section-heading"><p class="eyebrow">Recent Plans</p><h3>最近方案</h3></div>${plans.length ? `<div class="dashboard-list">${plans.slice(0, 3).map((savedPlan) => `<a href="#plan/${encodeURIComponent(savedPlan.id)}"><div><strong>${escapeHtml(savedPlan.title)}</strong><small>${escapeHtml(formatDateTime(savedPlan.updatedAt))}</small></div><span>查看 →</span></a>`).join("")}</div>` : `<div class="dashboard-empty"><p>还没有保存的方案。</p><a href="#planner">生成第一份方案 →</a></div>`}</section>
+        <section class="panel"><div class="detail-section-heading"><p class="eyebrow">Next Booking</p><h3>预约进度</h3></div>${nextBooking ? `${renderBookingProgress(nextBooking)}<a class="text-link" href="#bookings">查看所有预约 →</a>` : `<div class="dashboard-empty"><p>还没有预约记录。</p><a href="#providers">寻找创作伙伴 →</a></div>`}</section>
+      </div>
+    </section>`;
+}
+
 function getCurrentRoute() {
   const hash = window.location.hash.replace(/^#/, "");
   if (hash === "provider-dashboard") return { name: "providerDashboard" };
+  if (hash === "dashboard") return { name: "dashboard" };
+  if (hash === "inspiration") return { name: "inspiration" };
+  if (hash === "planner") return { name: "planner" };
+  if (hash === "providers") return { name: "providers" };
   if (hash === "bookings") return { name: "bookings" };
   const providerMatch = hash.match(/^provider\/(.+)$/);
   if (providerMatch) return { name: "provider", providerId: decodeURIComponent(providerMatch[1]) };
   const planMatch = hash.match(/^plan\/(.+)$/);
   if (planMatch) return { name: "plan", planId: decodeURIComponent(planMatch[1]) };
   if (hash === "plans") return { name: "plans" };
-  return { name: "home" };
+  return { name: "landing" };
 }
 
 function navigateToProvider(providerId, options = {}) {
@@ -420,7 +543,7 @@ function syncRouteState(route) {
   lastRouteKey = routeKey;
   if (route.name === "provider") activeProviderTab = "works";
   if (route.name === "providerDashboard") activeProviderDashboardSection = "overview";
-  if ((route.name === "plans" || route.name === "plan" || route.name === "bookings" || route.name === "providerDashboard") && !authStore.isAuthenticated()) {
+  if ((route.name === "plans" || route.name === "plan" || route.name === "bookings" || route.name === "dashboard" || route.name === "providerDashboard") && !authStore.isAuthenticated()) {
     authMode = "login";
     authError = "";
     isAuthModalOpen = true;
@@ -1936,6 +2059,18 @@ function renderProviderDashboardPage() {
   return providerDashboard.renderDashboard({ currentUser, provider: providerProfileDraft || provider, activeSection: activeProviderDashboardSection, profileError: providerProfileError, serviceState: { editingId: providerServiceEditingId, draft: providerServiceDraft, error: providerServiceError }, portfolioState: { editingId: providerPortfolioEditingId, draft: providerPortfolioDraft, error: providerPortfolioError }, scheduleError: providerScheduleError, bookingState: { bookings, error: providerBookingError } });
 }
 function renderMainContent(route) {
+  if (route.name === "landing") {
+    return renderLandingPage();
+  }
+  if (route.name === "inspiration") {
+    return renderInspirationPage();
+  }
+  if (route.name === "dashboard") {
+    return renderCustomerDashboardPage();
+  }
+  if (route.name === "providers") {
+    return `<section class="standalone-provider-page">${renderProviders()}</section>`;
+  }
   if (route.name === "provider") {
     return renderProviderProfile(route.providerId);
   }
@@ -1964,19 +2099,18 @@ function renderMainContent(route) {
 }
 
 function renderPrimaryNav(route) {
-  const hash = window.location.hash.replace(/^#/, "");
   const active = route.name === "plans" || route.name === "plan"
-    ? "plans"
+    ? "dashboard"
     : route.name === "bookings"
-      ? "bookings"
-      : route.name === "provider" || hash === "providers"
+      ? "dashboard"
+      : route.name === "provider" || route.name === "providers"
         ? "providers"
-        : "planner";
+        : route.name;
   const items = [
     ["planner", "#planner", "开始规划"],
     ["providers", "#providers", "找创作伙伴"],
-    ["plans", "#plans", "我的方案"],
-    ["bookings", "#bookings", "我的预约"],
+    ["inspiration", "#inspiration", "灵感"],
+    ["dashboard", "#dashboard", "我的空间"],
   ];
   return `<nav aria-label="主导航">${items.map(([id, href, label]) => `<a href="${href}" ${active === id ? 'class="active" aria-current="page"' : ""}>${label}</a>`).join("")}</nav>`;
 }
@@ -1995,6 +2129,7 @@ function render() {
     <main>
       ${renderMainContent(route)}
     </main>
+    <footer class="site-footer"><a class="brand footer-brand" href="#"><span>CP</span><strong>CosPilot</strong></a><p>From Imagination to Creation.</p><nav><a href="#planner">开始规划</a><a href="#providers">创作伙伴</a><a href="#inspiration">灵感</a></nav></footer>
     ${renderAuthModal()}
     ${renderBookingModal()}
     ${renderMyDrawer()}

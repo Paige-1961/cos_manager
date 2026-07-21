@@ -76,7 +76,10 @@ function parseNaturalRequirement(text) {
   const styles = styleKeywords.filter((style) => cleanText.includes(style));
   const ownedMap = ["服装", "假发", "妆造", "摄影", "摄影棚", "场地", "后期"];
   const ownedItems = ownedMap.filter((item) => new RegExp(`(已有|有|只有|自备|准备了).{0,8}${item}|${item}.{0,8}(已有|有|自备|准备了)`).test(cleanText));
-  const characterFromAfterBook = cleanText.match(/》\s*([\u4e00-\u9fa5A-Za-z0-9:_-]{1,12})/)?.[1];
+  const characterSegment = cleanText.match(/》\s*([\u4e00-\u9fa5A-Za-z0-9·:_-]{1,20})/)?.[1] || "";
+  const characterFromAfterBook = characterSegment
+    .split(/(?:的)?(?:角色扮演(?:写真)?|cosplay|cos|写真|正片|拍摄)/i)[0]
+    .trim();
   const characterFromShoot = cleanText.match(/(?:拍|出|cos)\s*([\u4e00-\u9fa5A-Za-z0-9:_-]{1,12})/)?.[1];
   const dateRange = parseDateRange(cleanText);
   const normalizedOwned = ownedItems.length ? [...new Set(ownedItems.map((item) => (item === "场地" ? "摄影棚" : item)))] : defaultRequirement.ownedItems;

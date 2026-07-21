@@ -1,15 +1,15 @@
 ﻿const defaultRequirement = {
-  character: "银狼",
-  fandom: "崩坏:星穹铁道",
+  character: "路飞",
+  fandom: "海贼王",
   city: "北京",
-  dateStart: "2026-07-16",
-  dateEnd: "2026-07-18",
-  preferredDate: "2026-07-18",
-  budget: 800,
-  style: "电影感",
-  ownedItems: ["服装"],
-  notes: "想拍棚拍正片，偏暗调和游戏感，希望尽量少自己沟通。",
-  rawText: "我想在7月16到18日之间，在北京拍《崩坏:星穹铁道》银狼，预算800元以内，偏电影感/暗调，目前只有服装，希望少一点自己沟通。",
+  dateStart: "2026-08-01",
+  dateEnd: "2026-08-31",
+  preferredDate: "2026-08-31",
+  budget: 1500,
+  style: "未指定",
+  ownedItems: [],
+  notes: "需要假发、妆造和摄影。",
+  rawText: "我要在北京拍《海贼王》路飞的角色扮演写真，2026年8月，预算1500，需要假发、妆造和摄影。",
 };
 
 const roleRequirements = [

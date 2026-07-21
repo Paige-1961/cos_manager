@@ -8,6 +8,9 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 
 ## 功能
 
+- Editorial 杂志风格 Landing Page，包含产品定位、使用流程、创作伙伴分类和社区精选作品。
+- 灵感页：复用已发布服务者作品，提供风格标签和作品浏览入口。
+- Customer Dashboard：汇总最近方案、预约进度和创作灵感入口。
 - 真实 LLM 需求理解、结构化输出、主动澄清与本地 fallback 解析。
 - 可解释 Agent 工作流：需求解析、缺口识别、服务者筛选、约束检查、方案组合、预算/档期检查、Brief 输出。
 - Customer / Provider 注册、登录、退出与 localStorage 会话恢复。
@@ -16,7 +19,7 @@ CosPilot 是一个面向二次元 Cos 出片的一站式平台原型，目标是
 - Provider Dashboard：主页资料、服务项目、作品管理、档期管理、公开主页预览。
 - 统一 Provider 数据源，稳定 `providerId` / `serviceId`。
 - Recommendation Engine 基于类别、城市、日期、风格、价格、评分等规则做最小可用匹配。
-- 保存方案 / 我的方案 / 方案详情恢复。
+- 保存方案 / 我的方案 / 方案详情恢复，以及预约状态时间线。
 - 收藏、预约、保存方案等操作的登录拦截。
 
 ## 如何运行
