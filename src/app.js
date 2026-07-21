@@ -46,7 +46,22 @@ let lastRouteKey = "";
 let agentUnderstanding = null;
 let isAgentParsing = false;
 let hasGeneratedPlan = true;
+let providerFilters = {
+  category: "all",
+  city: "all",
+  style: "all",
+  maxPrice: "",
+  availability: "",
+};
 const CURRENT_PLAN_BOOKING_VALUE = "__current-plan__";
+
+const PLANNER_EXAMPLES = [
+  "我想在北京拍《崩坏：星穹铁道》银狼，7月中旬，预算800元，偏电影感和暗调，需要妆造、摄影和棚。",
+  "想在上海拍《原神》芙宁娜的清透外景，预算1200元，服装和假发已有，需要妆娘、摄影和后期。",
+  "第一次准备 Cos 正片，角色是初音未来，希望在广州周末拍摄，预算1000元，请帮我补全需要的服务。",
+];
+
+const PLANNER_SUGGESTIONS = ["北京拍摄", "预算 800 元", "电影感", "暗调棚拍", "尽量少沟通"];
 
 const app = document.querySelector("#app");
 
@@ -61,6 +76,10 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "zh-CN"));
 }
 function displayDateRange(item) {
   return item.dateStart === item.dateEnd ? item.dateStart : `${item.dateStart} 至 ${item.dateEnd}`;
@@ -765,12 +784,22 @@ function renderComposer() {
       <div class="composer-copy">
         <p class="eyebrow">CosPilot</p>
         <h1>一句话生成出片方案</h1>
+        <p class="composer-intro">告诉我角色、城市、时间和预算。信息不完整也没关系，CosPilot 会先帮你整理，再组合合适的创作伙伴。</p>
       </div>
       <form id="natural-form" class="natural-form interactive-surface">
         <textarea name="naturalInput" rows="6" aria-label="自然语言需求">${escapeHtml(naturalInput)}</textarea>
+        <div class="planner-guidance" aria-label="输入灵感">
+          <div class="guidance-heading"><strong>不知道怎么写？试试这些例子</strong><span>点击即可填入</span></div>
+          <div class="prompt-examples">
+            ${PLANNER_EXAMPLES.map((example, index) => `<button class="prompt-example" data-example-prompt="${index}" type="button">${escapeHtml(example)}</button>`).join("")}
+          </div>
+          <div class="suggestion-row" aria-label="常用需求标签">
+            ${PLANNER_SUGGESTIONS.map((suggestion) => `<button class="suggestion-chip" data-prompt-suggestion="${escapeHtml(suggestion)}" type="button">+ ${escapeHtml(suggestion)}</button>`).join("")}
+          </div>
+        </div>
         <div class="composer-actions">
           <button class="primary-action interactive-surface" type="submit" ${isAgentParsing ? "disabled" : ""}>${isAgentParsing ? "正在理解..." : "生成方案"}</button>
-          <span>LLM 需求理解层 · 本地规则 fallback</span>
+          <span>AI 负责理解需求，真实服务者由规则引擎匹配</span>
         </div>
       </form>
     </section>
@@ -794,10 +823,13 @@ function renderAgentUnderstanding() {
     <section class="agent-understanding panel" aria-live="polite">
       <div class="agent-understanding-heading">
         <div><p class="eyebrow">Requirement Agent</p><h2>我理解你的需求</h2></div>
-        <span>${agentUnderstanding.source === "llm" ? "LLM 理解" : "本地 fallback"}</span>
+        <div class="understanding-actions">
+          <span class="understanding-source">${agentUnderstanding.source === "llm" ? "AI 理解" : "本地理解"}</span>
+          <button class="text-action" data-edit-requirement="true" type="button">修改原始需求</button>
+        </div>
       </div>
       <dl>${fields.map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
-      ${agentUnderstanding.clarificationQuestions.length ? `<div class="agent-clarifications"><strong>还需要你确认</strong><ul>${agentUnderstanding.clarificationQuestions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul></div>` : ""}
+      ${agentUnderstanding.clarificationQuestions.length ? `<div class="agent-clarifications"><div><strong>还需要你确认</strong><p>补充这些信息后，推荐结果会更准确。</p></div><ul>${agentUnderstanding.clarificationQuestions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul><button class="secondary-action" data-edit-requirement="true" type="button">返回输入框补充</button></div>` : `<div class="understanding-ready"><strong>需求已就绪</strong><span>下一步已基于真实 Provider 数据生成方案。</span></div>`}
     </section>
   `;
 }
@@ -818,14 +850,23 @@ function renderFinalPlan() {
   const plan = getPlan();
   const resolvedPlan = getResolvedPlan();
   const currentOutput = getCurrentPlanOutput();
+  const overBudget = resolvedPlan.total > requirement.budget;
+  const warnings = resolvedPlan.warnings || [];
+  const adjustments = resolvedPlan.adjustments || [];
   return `
     <section class="result-layout">
       <article class="panel plan-hero interactive-surface">
-        <div class="panel-kicker">当前方案</div>
-        <h2>${plan.name}</h2>
-        <p class="lead">${resolvedPlan.sharedDates.length ? `建议日期：${currentOutput.selectedDate}` : "需要进一步协调共同档期"}</p>
-        <div class="big-number">${formatCurrency(resolvedPlan.total)}</div>
-        <div class="plan-actions"><button class="secondary-action interactive-surface" data-protected-action="save-plan" type="button">保存方案</button></div>
+        <div class="recommendation-heading">
+          <div><div class="panel-kicker">推荐方案</div><h2>${plan.name}</h2></div>
+          <span class="recommendation-status ${overBudget || warnings.length ? "needs-attention" : "ready"}">${overBudget || warnings.length ? "需要确认" : "可以开始协调"}</span>
+        </div>
+        <div class="plan-fact-grid">
+          <div><span>方案总价</span><strong>${formatCurrency(resolvedPlan.total)}</strong><small>${overBudget ? `超出预算 ${formatCurrency(resolvedPlan.total - requirement.budget)}` : "在预算范围内"}</small></div>
+          <div><span>建议日期</span><strong>${resolvedPlan.sharedDates.length ? currentOutput.selectedDate : "待协调"}</strong><small>${resolvedPlan.sharedDates.length ? "成员共同可约" : "当前没有共同档期"}</small></div>
+          <div><span>创作伙伴</span><strong>${resolvedPlan.resolvedMembers.length} 位</strong><small>来自真实 Provider 数据</small></div>
+        </div>
+        ${warnings.length ? `<div class="recommendation-warning"><strong>开始前请确认</strong><ul>${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
+        <div class="plan-section-heading"><div><span>推荐创作伙伴</span><small>点击可查看作品、服务和档期</small></div><button class="secondary-action interactive-surface" data-protected-action="save-plan" type="button">保存方案</button></div>
         <div class="member-list clickable-members">
           ${resolvedPlan.resolvedMembers
             .map(
@@ -842,8 +883,12 @@ function renderFinalPlan() {
       </article>
       <article class="panel compact-panel interactive-surface">
         <div class="panel-kicker">Coordination</div>
-        <h3>调整记录</h3>
-        <ul class="plain-list">${resolvedPlan.actions.map((action) => `<li>${action}</li>`).join("")}</ul>
+        <h3>为什么这样推荐</h3>
+        <p class="lead">系统综合类别、地点、档期、风格和预算进行确定性匹配。</p>
+        <details class="recommendation-details">
+          <summary>查看匹配与调整记录</summary>
+          <ul class="plain-list">${(adjustments.length ? adjustments : resolvedPlan.actions).map((action) => `<li>${escapeHtml(action)}</li>`).join("")}</ul>
+        </details>
       </article>
       <article class="panel compact-panel interactive-surface">
         <div class="panel-kicker">Timeline</div>
@@ -908,15 +953,39 @@ function renderBriefs() {
 }
 
 function renderProviders() {
-  const visibleProviders = providerData.getAllProviders();
+  const allProviders = providerData.getAllProviders();
+  const categoryLabels = { makeup: "妆造", wig: "假发 / 发型", photographer: "摄影", studio: "摄影棚 / 场地", retoucher: "后期" };
+  const categories = uniqueSorted(allProviders.map((provider) => provider.category));
+  const cities = uniqueSorted(allProviders.map((provider) => provider.city || provider.location?.city));
+  const styles = uniqueSorted(allProviders.flatMap((provider) => provider.styles || []));
+  const maxPrice = Number(providerFilters.maxPrice || 0);
+  const visibleProviders = allProviders.filter((provider) => {
+    const city = provider.city || provider.location?.city || "";
+    const price = Number(provider.priceFrom || provider.price || 0);
+    return (providerFilters.category === "all" || provider.category === providerFilters.category)
+      && (providerFilters.city === "all" || city === providerFilters.city)
+      && (providerFilters.style === "all" || (provider.styles || []).includes(providerFilters.style))
+      && (!maxPrice || price <= maxPrice)
+      && (!providerFilters.availability || (provider.availableDates || []).includes(providerFilters.availability));
+  });
   return `
     <section class="split-section">
       <div class="section-heading slim-heading">
         <p class="eyebrow">Providers</p>
-        <h2>服务者主页</h2>
+        <h2>寻找创作伙伴</h2>
+        <p>按你的项目条件浏览妆造、摄影、场地、假发和后期伙伴。</p>
       </div>
+      <form id="provider-filter-form" class="provider-filter-panel" aria-label="创作伙伴筛选">
+        <label><span>服务类型</span><select name="category"><option value="all">全部类型</option>${categories.map((category) => `<option value="${escapeHtml(category)}" ${providerFilters.category === category ? "selected" : ""}>${escapeHtml(categoryLabels[category] || category)}</option>`).join("")}</select></label>
+        <label><span>城市</span><select name="city"><option value="all">全部城市</option>${cities.map((city) => `<option value="${escapeHtml(city)}" ${providerFilters.city === city ? "selected" : ""}>${escapeHtml(city)}</option>`).join("")}</select></label>
+        <label><span>风格</span><select name="style"><option value="all">全部风格</option>${styles.map((style) => `<option value="${escapeHtml(style)}" ${providerFilters.style === style ? "selected" : ""}>${escapeHtml(style)}</option>`).join("")}</select></label>
+        <label><span>最高起步价</span><input name="maxPrice" type="number" min="0" step="50" value="${escapeHtml(providerFilters.maxPrice)}" placeholder="不限" /></label>
+        <label><span>可约日期</span><input name="availability" type="date" value="${escapeHtml(providerFilters.availability)}" /></label>
+        <button class="secondary-action provider-filter-reset" data-provider-filter-reset="true" type="button">重置</button>
+      </form>
+      <div class="provider-results-summary" role="status"><strong>${visibleProviders.length}</strong> 位符合当前条件<span>共 ${allProviders.length} 位已发布伙伴</span></div>
       <div class="provider-grid compact-providers">
-        ${visibleProviders
+        ${visibleProviders.length ? visibleProviders
           .map(
             (provider) => `
               <button class="provider-card interactive-surface" data-provider-id="${provider.providerId || provider.id}" type="button">
@@ -933,7 +1002,7 @@ function renderProviders() {
               </button>
             `
           )
-          .join("")}
+          .join("") : `<article class="panel provider-filter-empty"><h3>暂时没有完全匹配的伙伴</h3><p>可以放宽城市、预算、风格或日期条件后再试。</p><button class="secondary-action" data-provider-filter-reset="true" type="button">清除筛选</button></article>`}
       </div>
     </section>
   `;
@@ -1113,6 +1182,61 @@ function bindEvents() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-example-prompt]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const textarea = document.querySelector("#natural-form textarea[name='naturalInput']");
+      const example = PLANNER_EXAMPLES[Number(button.dataset.examplePrompt)] || "";
+      if (!textarea || !example) return;
+      textarea.value = example;
+      naturalInput = example;
+      textarea.focus();
+    });
+  });
+
+  document.querySelectorAll("[data-prompt-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const textarea = document.querySelector("#natural-form textarea[name='naturalInput']");
+      const suggestion = String(button.dataset.promptSuggestion || "").trim();
+      if (!textarea || !suggestion) return;
+      const current = textarea.value.trim();
+      if (!current.includes(suggestion)) textarea.value = `${current}${current ? "，" : ""}${suggestion}`;
+      naturalInput = textarea.value;
+      textarea.focus();
+    });
+  });
+
+  document.querySelectorAll("[data-edit-requirement]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const textarea = document.querySelector("#natural-form textarea[name='naturalInput']");
+      textarea?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => textarea?.focus(), 250);
+    });
+  });
+
+  const providerFilterForm = document.querySelector("#provider-filter-form");
+  if (providerFilterForm) {
+    providerFilterForm.addEventListener("change", () => {
+      const formData = new FormData(providerFilterForm);
+      providerFilters = {
+        category: String(formData.get("category") || "all"),
+        city: String(formData.get("city") || "all"),
+        style: String(formData.get("style") || "all"),
+        maxPrice: String(formData.get("maxPrice") || ""),
+        availability: String(formData.get("availability") || ""),
+      };
+      render();
+      window.requestAnimationFrame(() => document.querySelector("#providers")?.scrollIntoView({ block: "start" }));
+    });
+  }
+
+  document.querySelectorAll("[data-provider-filter-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      providerFilters = { category: "all", city: "all", style: "all", maxPrice: "", availability: "" };
+      render();
+      window.requestAnimationFrame(() => document.querySelector("#providers")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    });
+  });
 
   document.querySelectorAll("[data-plan-index]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1825,6 +1949,24 @@ function renderMainContent(route) {
   `;
 }
 
+function renderPrimaryNav(route) {
+  const hash = window.location.hash.replace(/^#/, "");
+  const active = route.name === "plans" || route.name === "plan"
+    ? "plans"
+    : route.name === "bookings"
+      ? "bookings"
+      : route.name === "provider" || hash === "providers"
+        ? "providers"
+        : "planner";
+  const items = [
+    ["planner", "#planner", "开始规划"],
+    ["providers", "#providers", "找创作伙伴"],
+    ["plans", "#plans", "我的方案"],
+    ["bookings", "#bookings", "我的预约"],
+  ];
+  return `<nav aria-label="主导航">${items.map(([id, href, label]) => `<a href="${href}" ${active === id ? 'class="active" aria-current="page"' : ""}>${label}</a>`).join("")}</nav>`;
+}
+
 function render() {
   const route = getCurrentRoute();
   syncRouteState(route);
@@ -1832,7 +1974,7 @@ function render() {
     <header class="topbar">
       <a class="brand" href="#"><span>CP</span><strong>CosPilot</strong></a>
       <div class="topbar-right">
-        <nav aria-label="主导航"><a href="#planner">规划</a><a href="#plans">方案</a><a href="#providers">服务者</a></nav>
+        ${renderPrimaryNav(route)}
         ${renderAuthNav()}
       </div>
     </header>
