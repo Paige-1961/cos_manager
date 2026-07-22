@@ -63,7 +63,10 @@
       description: service.description || "",
       price: Number(service.price || 0),
       duration: service.duration || "",
-      category: service.category || provider.category,
+      // Provider profiles currently expose one service category. Keep every
+      // service aligned with it so profiles created before a category change
+      // are not rejected by recommendation validation.
+      category: provider.category || service.category,
     };
   }
 
@@ -192,9 +195,14 @@
     const profiles = readProfiles();
     let index = profiles.findIndex((profile) => profile.userId === userId);
     const current = index >= 0 ? profiles[index] : defaultProvider({ id: userId, email: updates.email });
+    const nextCategory = updates.category || current.category || "makeup";
+    const nextServices = (Array.isArray(updates.services) ? updates.services : current.services || [])
+      .map((service) => ({ ...service, category: nextCategory }));
     const next = {
       ...current,
       ...updates,
+      category: nextCategory,
+      services: nextServices,
       providerId: current.providerId || current.id || createProviderId({ id: userId, email: updates.email }),
       id: current.providerId || current.id || createProviderId({ id: userId, email: updates.email }),
       location: {
